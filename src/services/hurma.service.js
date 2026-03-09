@@ -98,6 +98,43 @@ async function findCandidateByEmail(email) {
 }
 
 /**
+ * Search for a candidate by full name.
+ * Used as a fallback when email search returns no results.
+ *
+ * @param {string} name
+ * @returns {Promise<object|null>} First matching candidate or null
+ */
+async function findCandidateByName(name) {
+  const client = buildClient();
+
+  logger.info({ name }, 'Searching Hurma candidate by name');
+
+  try {
+    const response = await client.get('/api/v3/candidates', {
+      params: { 'filter[name]': name, per_page: 5 },
+    });
+
+    const items = response.data?.data || [];
+    if (!items.length) return null;
+
+    // Exact full-name match first (case-insensitive), then return first result
+    const normalizedQuery = name.toLowerCase().trim();
+    const exact = items.find((c) => {
+      const full = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase().trim();
+      return full === normalizedQuery;
+    });
+
+    return exact || items[0];
+  } catch (err) {
+    logger.error(
+      { name, status: err.response?.status, message: err.message },
+      'Hurma findCandidateByName error',
+    );
+    throw err;
+  }
+}
+
+/**
  * Create a comment on a candidate record in Hurma.
  *
  * Endpoint: POST /api/v3/candidates/{id}/comments
@@ -133,4 +170,4 @@ async function createCandidateComment(candidateId, commentText) {
   }
 }
 
-module.exports = { getCandidateById, findCandidateByEmail, createCandidateComment };
+module.exports = { getCandidateById, findCandidateByEmail, findCandidateByName, createCandidateComment };

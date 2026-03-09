@@ -2,22 +2,32 @@
 
 /**
  * Regex patterns used to extract Hurma candidate IDs from meeting metadata.
+ *
+ * Important: Hurma candidate IDs are alphanumeric strings (e.g. "Je", "Ab3"),
+ * NOT plain integers — patterns must use [A-Za-z0-9]+ not \d+.
+ *
  * Priority order matches the business specification.
  */
 const PATTERNS = {
-  // Primary: HURMA_CANDIDATE_ID=12345 in description
-  CANDIDATE_ID_DESCRIPTION: /HURMA_CANDIDATE_ID=(\d+)/i,
+  // Primary: HURMA_CANDIDATE_ID=Je  (or any alphanumeric ID)
+  CANDIDATE_ID_DESCRIPTION: /HURMA_CANDIDATE_ID=([A-Za-z0-9]+)/i,
 
-  // Secondary: CID:12345 in title or description
-  CANDIDATE_ID_CID: /CID:(\d+)/i,
+  // Secondary: CID:Je in title or description
+  CANDIDATE_ID_CID: /CID:([A-Za-z0-9]+)/i,
+
+  // Extract a human name from common meeting title formats:
+  //   "Interview with John Smith"   → "John Smith"
+  //   "John Smith - Final Interview"→ "John Smith"
+  //   "Call | John Smith"           → "John Smith"
+  INTERVIEW_TITLE_NAME: [
+    /interview(?:\s+with)?\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i,
+    /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*[-–|]/,
+    /[-–|]\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/,
+  ],
 };
 
 /**
  * Extracts the Hurma candidate ID from meeting description.
- * Looks for HURMA_CANDIDATE_ID=<id> pattern.
- *
- * @param {string} description
- * @returns {string|null}
  */
 function extractCandidateIdFromDescription(description) {
   if (!description) return null;
@@ -27,9 +37,6 @@ function extractCandidateIdFromDescription(description) {
 
 /**
  * Extracts the Hurma candidate ID from meeting title using CID:<id> format.
- *
- * @param {string} title
- * @returns {string|null}
  */
 function extractCandidateIdFromTitle(title) {
   if (!title) return null;
@@ -38,7 +45,23 @@ function extractCandidateIdFromTitle(title) {
 }
 
 /**
- * Tries both description and title extraction.
+ * Tries to extract a candidate full name from the meeting title.
+ * Returns null if no clear name pattern is detected.
+ *
+ * @param {string} title
+ * @returns {string|null}
+ */
+function extractNameFromTitle(title) {
+  if (!title) return null;
+  for (const pattern of PATTERNS.INTERVIEW_TITLE_NAME) {
+    const match = title.match(pattern);
+    if (match) return match[1].trim();
+  }
+  return null;
+}
+
+/**
+ * Tries both description and title ID extraction.
  *
  * @param {string} description
  * @param {string} title
@@ -54,4 +77,9 @@ function parseCandidateId(description, title) {
   return { candidateId: null, matchedBy: null };
 }
 
-module.exports = { parseCandidateId, extractCandidateIdFromDescription, extractCandidateIdFromTitle };
+module.exports = {
+  parseCandidateId,
+  extractCandidateIdFromDescription,
+  extractCandidateIdFromTitle,
+  extractNameFromTitle,
+};

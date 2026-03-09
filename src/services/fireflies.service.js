@@ -17,6 +17,8 @@ const TRANSCRIPT_QUERY = `
       transcript_url
       audio_url
       video_url
+      organizer_email
+      calendar_description
       meeting_attendees {
         displayName
         email
@@ -101,6 +103,8 @@ function normalizeTranscript(raw) {
     transcriptUrl: raw.transcript_url || null,
     audioUrl: raw.audio_url || null,
     videoUrl: raw.video_url || null,
+    organizerEmail: raw.organizer_email || null,
+    calendarDescription: raw.calendar_description || null,
     attendees: attendees.map((a) => ({
       name: a.displayName || null,
       email: a.email || null,
