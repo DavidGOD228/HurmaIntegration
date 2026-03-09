@@ -1,0 +1,58 @@
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hurma_recorder
+      POSTGRES_USER: hurma_recorder
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hurma_recorder"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Exposed to localhost for local dev / migrations run from host
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  # ── Migration runner (one-shot, exits after running) ────────────────────────
+  migrate:
+    build: .
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://hurma_recorder:${POSTGRES_PASSWORD:-changeme_in_production}@postgres:5432/hurma_recorder
+    command: ["node", "src/db/migrate.js"]
+
+  # ── Application ─────────────────────────────────────────────────────────────
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://hurma_recorder:${POSTGRES_PASSWORD:-changeme_in_production}@postgres:5432/hurma_recorder
+      NODE_ENV: production
+    ports:
+      # Bind to localhost only — expose to the internet via Nginx/Caddy reverse proxy
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  postgres_data:
+    driver: local
