@@ -188,6 +188,8 @@ This description is embedded into the Google Calendar event, which Fireflies rea
    - **Secret:** choose a strong random string → set as `FIREFLIES_WEBHOOK_SECRET` in `.env`
 4. Save and test using the Fireflies test button or the curl example below.
 
+**Multiple recruiters:** One webhook URL is used for everyone. Configure it once in Fireflies (company or team account). Recruiters do not add the URL anywhere; they only add the candidate ID in the Hurma interview description. See [Instructions for recruiters](docs/INSTRUCTIONS_FOR_RECRUITERS.md).
+
 ---
 
 ## Environment variables
@@ -241,14 +243,15 @@ The service will be available at `http://localhost:3000`.
 ## Docker deployment (local)
 
 ```bash
-# Build and start all services
+# Run migrations once (first time only), then build and start
+docker compose --profile migrate run --rm migrate
 docker compose up --build -d
 
 # View logs
 docker compose logs -f app
 
 # Run migrations manually if needed
-docker compose run --rm migrate
+docker compose --profile migrate run --rm migrate
 
 # Stop all services
 docker compose down
@@ -293,42 +296,28 @@ cd /opt/hurma-recorder
 cp .env.example .env
 nano .env   # fill in all production values
 
-# Start services (includes auto migration)
+# Run migrations once, then start services
+docker compose --profile migrate run --rm migrate
 docker compose up --build -d
 
 # Verify health
 curl http://localhost:3000/health
 ```
 
-### 4. Set up Nginx reverse proxy
+### 4. Set up Nginx reverse proxy (HTTPS URL for Fireflies webhooks)
 
+You need a **domain name** pointing to this server (e.g. `hooks.yourcompany.com` → A record to `204.168.151.135`).
+
+**Quick (script):**
 ```bash
-apt-get install -y nginx certbot python3-certbot-nginx
-
-# Create Nginx config
-cat > /etc/nginx/sites-available/hurma-recorder << 'EOF'
-server {
-    listen 80;
-    server_name your-server.example.com;
-
-    location / {
-        proxy_pass         http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-        proxy_read_timeout 60s;
-    }
-}
-EOF
-
-ln -s /etc/nginx/sites-available/hurma-recorder /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
-
-# Issue TLS certificate
-certbot --nginx -d your-server.example.com
+cd /opt/hurma-recorder
+chmod +x scripts/setup-webserver.sh
+sudo ./scripts/setup-webserver.sh hooks.yourcompany.com
 ```
+
+**Manual:** see [docs/WEB_SERVER_SETUP.md](docs/WEB_SERVER_SETUP.md) for full steps.
+
+After setup, your webhook URL is: **`https://YOUR_DOMAIN/webhooks/fireflies`**
 
 ### 5. Firewall
 

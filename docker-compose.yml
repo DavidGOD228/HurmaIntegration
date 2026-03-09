@@ -18,8 +18,10 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
 
-  # ── Migration runner (one-shot, exits after running) ────────────────────────
+  # ── Migration runner (one-shot). Only runs with: docker compose --profile migrate run --rm migrate
   migrate:
+    profiles:
+      - migrate
     build: .
     restart: "no"
     depends_on:
@@ -31,14 +33,13 @@ services:
     command: ["node", "src/db/migrate.js"]
 
   # ── Application ─────────────────────────────────────────────────────────────
+  # Migrate has profile "migrate" so it does not start on "up -d". Run once: docker compose --profile migrate run --rm migrate
   app:
     build: .
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     env_file: .env
     environment:
       DATABASE_URL: postgres://hurma_recorder:${POSTGRES_PASSWORD:-changeme_in_production}@postgres:5432/hurma_recorder

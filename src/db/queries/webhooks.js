@@ -5,14 +5,14 @@ const db = require('../index');
 /**
  * Persist an incoming webhook payload before any processing.
  */
-async function insertWebhook({ source, eventType, fireflysMeetingId, fireflysTranscriptId, payloadJson, signatureValid }) {
+async function insertWebhook({ source, eventType, fireflysMeetingId, fireflysTranscriptId, payloadJson, signatureValid, userId = null }) {
   const result = await db.query(
     `INSERT INTO webhooks
        (source, event_type, fireflies_meeting_id, fireflies_transcript_id,
-        payload_json, signature_valid, processing_status)
-     VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+        payload_json, signature_valid, processing_status, user_id)
+     VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)
      RETURNING id`,
-    [source, eventType, fireflysMeetingId, fireflysTranscriptId, JSON.stringify(payloadJson), signatureValid],
+    [source, eventType, fireflysMeetingId, fireflysTranscriptId, JSON.stringify(payloadJson), signatureValid, userId],
   );
   return result.rows[0];
 }

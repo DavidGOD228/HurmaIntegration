@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "HurmaRecorder",
+  "version": "1.0.0",
+  "description": "Auto-syncs Fireflies interview transcripts to Hurma candidate records.",
+
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+
+  "host_permissions": [
+    "*://*.hurma.work/*"
+  ],
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "HurmaRecorder"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["*://*.hurma.work/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "background": {
+    "service_worker": "background.js"
+  }
+}

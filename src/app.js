@@ -7,6 +7,7 @@ const pinoHttp = require('pino-http');
 const logger = require('./utils/logger');
 const errorHandler = require('./middleware/errorHandler');
 const webhookRouter = require('./routes/webhooks');
+const apiRouter = require('./routes/api');
 
 const app = express();
 
@@ -27,13 +28,12 @@ app.use(
   }),
 );
 
-// ── JSON body parser for non-webhook routes ───────────────────────────────────
-// NOTE: The webhook route uses rawBodyMiddleware instead — do NOT put express.json()
-// before the webhook route, as it would consume the raw body needed for HMAC.
-app.use('/api', express.json({ limit: '512kb' }));
+// NOTE: The webhook route uses rawBodyMiddleware — do NOT add express.json() globally
+// before webhooks, it would consume the raw body needed for HMAC.
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/webhooks', webhookRouter);
+app.use('/api', apiRouter);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {

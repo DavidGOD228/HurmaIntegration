@@ -40,13 +40,14 @@ const TRANSCRIPT_QUERY = `
 
 /**
  * Build an axios instance for Fireflies with auth header.
+ * @param {string} [apiKey] - Override API key (for multi-user). Falls back to env var.
  */
-function buildClient() {
+function buildClient(apiKey) {
   return axios.create({
     baseURL: FIREFLIES_GRAPHQL_URL,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.FIREFLIES_API_KEY}`,
+      Authorization: `Bearer ${apiKey || config.FIREFLIES_API_KEY}`,
     },
     timeout: 30000,
   });
@@ -56,10 +57,11 @@ function buildClient() {
  * Fetch full transcript data from Fireflies GraphQL API by transcript ID.
  *
  * @param {string} transcriptId - Fireflies transcript ID from webhook payload
+ * @param {string} [apiKey]     - Per-user Fireflies API key (optional)
  * @returns {Promise<object>} Normalized transcript data
  */
-async function fetchTranscript(transcriptId) {
-  const client = buildClient();
+async function fetchTranscript(transcriptId, apiKey) {
+  const client = buildClient(apiKey);
 
   logger.info({ transcriptId }, 'Fetching Fireflies transcript');
 

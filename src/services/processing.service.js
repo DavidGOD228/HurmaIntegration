@@ -85,12 +85,14 @@ function buildNoteContent(transcript, meetingMeta) {
  * @param {string} fireflysMeetingId     - From webhook payload
  * @param {string} fireflysTranscriptId  - From webhook payload
  * @param {object} webhookBody           - Full parsed webhook payload
+ * @param {object} [user]                - User row from DB (multi-user mode). If null, falls back to env vars.
  */
 async function processFirefliesWebhook(
   webhookId,
   fireflysMeetingId,
   fireflysTranscriptId,
   webhookBody,
+  user = null,
 ) {
   logger.info(
     { webhookId, fireflysMeetingId, fireflysTranscriptId },
@@ -98,9 +100,12 @@ async function processFirefliesWebhook(
   );
 
   // ── Step 1: Fetch transcript from Fireflies ───────────────────────────────
+  // Use per-user API key if available, otherwise fall back to env var
+  const firefliesApiKey = user?.fireflies_api_key || null;
+
   let transcript;
   try {
-    transcript = await firefliesService.fetchTranscript(fireflysTranscriptId);
+    transcript = await firefliesService.fetchTranscript(fireflysTranscriptId, firefliesApiKey);
   } catch (err) {
     logger.error(
       { webhookId, fireflysTranscriptId, err: err.message },

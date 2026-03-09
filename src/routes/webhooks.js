@@ -7,19 +7,10 @@ const { handleFirefliesWebhook } = require('../controllers/fireflies.controller'
 
 const router = Router();
 
-/**
- * POST /webhooks/fireflies
- *
- * Middleware stack (order is critical):
- *   1. Rate limiter    — basic flood protection
- *   2. rawBody         — capture raw bytes for HMAC verification, then parse JSON
- *   3. Controller      — signature check, persist, async process
- */
-router.post(
-  '/fireflies',
-  webhookRateLimiter,
-  rawBodyMiddleware,
-  handleFirefliesWebhook,
-);
+// Single-user legacy route (uses env vars)
+router.post('/fireflies', webhookRateLimiter, rawBodyMiddleware, handleFirefliesWebhook);
+
+// Per-user route — each recruiter gets their own URL with their token
+router.post('/fireflies/:token', webhookRateLimiter, rawBodyMiddleware, handleFirefliesWebhook);
 
 module.exports = router;

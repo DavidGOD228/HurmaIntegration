@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HurmaRecorder</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 360px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      color: #1a1a2e;
+      background: #f7f8fc;
+    }
+
+    .header {
+      background: #2d5be3;
+      color: white;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header h1 { font-size: 15px; font-weight: 600; }
+    .header .dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; flex-shrink: 0; }
+    .header .dot.red { background: #f87171; }
+
+    .section {
+      padding: 16px;
+      border-bottom: 1px solid #e5e7eb;
+      background: white;
+    }
+    .section:last-child { border-bottom: none; }
+
+    label { display: block; font-weight: 500; margin-bottom: 5px; color: #374151; }
+
+    input, textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 10px;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input:focus, textarea:focus { border-color: #2d5be3; }
+
+    button {
+      width: 100%;
+      padding: 9px;
+      background: #2d5be3;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: #2448c0; }
+    button.secondary {
+      background: transparent;
+      color: #6b7280;
+      border: 1px solid #d1d5db;
+      font-weight: 400;
+      margin-top: 6px;
+    }
+    button.secondary:hover { background: #f3f4f6; }
+
+    .url-box {
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-family: monospace;
+      font-size: 11px;
+      word-break: break-all;
+      color: #374151;
+      margin-bottom: 8px;
+    }
+
+    .copy-btn {
+      background: #f3f4f6;
+      color: #374151;
+      border: 1px solid #d1d5db;
+      font-weight: 400;
+    }
+    .copy-btn:hover { background: #e5e7eb; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge.done    { background: #dcfce7; color: #166534; }
+    .badge.failed  { background: #fee2e2; color: #991b1b; }
+    .badge.pending { background: #fef9c3; color: #854d0e; }
+    .badge.duplicate { background: #e0e7ff; color: #3730a3; }
+
+    .activity-item {
+      padding: 8px 0;
+      border-bottom: 1px solid #f3f4f6;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-title { font-size: 12px; color: #374151; flex: 1; min-width: 0; }
+    .activity-title span { display: block; color: #9ca3af; font-size: 11px; margin-top: 2px; }
+
+    .empty { color: #9ca3af; text-align: center; padding: 12px 0; font-size: 12px; }
+
+    .candidate-bar {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #1e40af;
+      margin-bottom: 0;
+    }
+
+    .error-msg { color: #dc2626; font-size: 12px; margin-top: 6px; display: none; }
+    .success-msg { color: #16a34a; font-size: 12px; margin-top: 6px; display: none; }
+
+    #setup-section h2, #main-section h2 {
+      font-size: 12px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div id="status-dot" class="dot red"></div>
+  <h1>HurmaRecorder</h1>
+</div>
+
+<!-- SETUP (shown when not registered) -->
+<div id="setup-section">
+  <div class="section">
+    <h2>First-time setup</h2>
+    <label>Your name</label>
+    <input id="setup-name" type="text" placeholder="e.g. Olena Recruiter">
+
+    <label>Fireflies API Key</label>
+    <input id="setup-api-key" type="password" placeholder="From Fireflies → API settings">
+
+    <label>Fireflies Webhook Secret</label>
+    <input id="setup-secret" type="password" placeholder="You'll set this same value in Fireflies">
+
+    <label>Backend URL</label>
+    <input id="setup-backend" type="text" placeholder="https://hurmarecorder.development-test.website">
+
+    <button id="register-btn">Register</button>
+    <div id="setup-error" class="error-msg"></div>
+  </div>
+</div>
+
+<!-- MAIN (shown after registration) -->
+<div id="main-section" style="display:none">
+
+  <!-- Webhook URL -->
+  <div class="section">
+    <h2>Your webhook URL</h2>
+    <div id="webhook-url" class="url-box"></div>
+    <button class="copy-btn" id="copy-btn">Copy URL</button>
+    <div id="copy-success" class="success-msg">Copied!</div>
+    <p style="color:#6b7280;font-size:11px;margin-top:8px">
+      Paste this into Fireflies → Settings → Webhook.<br>
+      Use your webhook secret as the "Secret" there.
+    </p>
+  </div>
+
+  <!-- Current candidate (injected by content script) -->
+  <div id="candidate-section" class="section" style="display:none">
+    <h2>Current candidate</h2>
+    <div id="candidate-bar" class="candidate-bar"></div>
+  </div>
+
+  <!-- Recent activity -->
+  <div class="section">
+    <h2>Recent activity</h2>
+    <div id="activity-list"><div class="empty">No activity yet</div></div>
+  </div>
+
+  <div class="section">
+    <button class="secondary" id="logout-btn">Reset / switch account</button>
+  </div>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>
