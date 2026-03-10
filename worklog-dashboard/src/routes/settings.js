@@ -6,19 +6,23 @@ const router = express.Router();
 
 const MONITORING_MODES = ['included', 'excluded', 'ignored_fulltime_external_project'];
 
-// GET /api/settings/employees?search=&mode=&page=&limit=
+// GET /api/settings/employees?search=&mode=&page=&limit=&active_only=1
 router.get('/employees', async (req, res, next) => {
   try {
-    const search = req.query.search || '';
-    const mode   = req.query.mode   || '';
-    const page   = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit  = Math.min(200, parseInt(req.query.limit, 10) || 50);
-    const offset = (page - 1) * limit;
+    const search     = req.query.search || '';
+    const mode       = req.query.mode   || '';
+    const activeOnly = req.query.active_only !== '0' && req.query.active_only !== 'false';
+    const page       = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit      = Math.min(200, parseInt(req.query.limit, 10) || 50);
+    const offset     = (page - 1) * limit;
 
     let where = 'WHERE 1=1';
     const params = [];
     let idx = 1;
 
+    if (activeOnly) {
+      where += ` AND e.is_active = true`;
+    }
     if (search) {
       where += ` AND (e.full_name ILIKE $${idx} OR e.email ILIKE $${idx})`;
       params.push(`%${search}%`);

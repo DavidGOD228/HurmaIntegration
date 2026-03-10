@@ -35,15 +35,20 @@ const v = config.HURMA_HR_API_VERSION; // 'v1' or 'v3'
  * Fetch paginated employee list from Hurma.
  * Endpoint: GET /api/{v}/employees
  *
+ * Hurma v1 status param: 7=probation only, 8=current+fired, 9=current only (incl. probation)
+ *
  * @param {object} opts
  * @param {number} [opts.page=1]
  * @param {number} [opts.perPage=100]
+ * @param {number} [opts.status=9]  v1 only: 9=current employees (excl. fired)
  * @returns {Promise<{ employees: any[], total: number, page: number, perPage: number }>}
  */
-async function getEmployees({ page = 1, perPage = 100 } = {}) {
+async function getEmployees({ page = 1, perPage = 100, status = 9 } = {}) {
   try {
+    const params = { page, per_page: perPage };
+    if (v === 'v1' && status != null) params.status = status;
     const { data } = await getClient().get(`/api/${v}/employees`, {
-      params: { page, per_page: perPage },
+      params,
     });
     // Hurma v1 wraps as { result: { data: [...], current_page, total } }; v3 may differ.
     if (Array.isArray(data)) {

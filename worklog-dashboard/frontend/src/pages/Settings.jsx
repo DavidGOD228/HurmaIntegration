@@ -34,6 +34,7 @@ export default function Settings() {
   const [page,      setPage]      = useState(1);
   const [search,    setSearch]    = useState('');
   const [filterMode, setFilterMode] = useState('');
+  const [includeInactive, setIncludeInactive] = useState(false);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState('');
   const [saving,    setSaving]    = useState({});
@@ -47,13 +48,14 @@ export default function Settings() {
     try {
       const res = await getSettingsEmployees({
         search, mode: filterMode, page, limit: LIMIT,
+        active_only: includeInactive ? 0 : 1,
       });
       setEmployees(res.employees);
       setTotal(res.total);
     } catch (e) {
       setError(e.response?.data?.error || e.message);
     } finally { setLoading(false); }
-  }, [search, filterMode, page]);
+  }, [search, filterMode, page, includeInactive]);
 
   useEffect(() => { loadEmployees(); }, [loadEmployees]);
 
@@ -137,6 +139,15 @@ export default function Settings() {
           <option value="">All modes</option>
           {MODE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includeInactive}
+            onChange={(e) => { setIncludeInactive(e.target.checked); setPage(1); }}
+            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          Include inactive (left/fired)
+        </label>
         <span className="text-sm text-gray-400">{total} total</span>
       </div>
 

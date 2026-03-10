@@ -63,8 +63,10 @@ async function syncEmployees() {
       redmineByName.set(name, u);
     }
 
+    const currentHurmaIds = new Set();
     for (const emp of hurmaEmployees) {
       const hurmaId   = String(emp.id || emp.employee_id || '');
+      currentHurmaIds.add(hurmaId);
       const fullName  = [emp.first_name, emp.last_name].filter(Boolean).join(' ')
                         || emp.full_name || emp.name || 'Unknown';
       const email     = (emp.email || emp.work_email || '').toLowerCase().trim();
@@ -150,6 +152,21 @@ async function syncEmployees() {
         );
       }
       processed++;
+    }
+
+    // Mark employees not in current Hurma response as inactive (left/fired)
+    if (currentHurmaIds.size > 0) {
+      const ids = Array.from(currentHurmaIds);
+      const result = await db.query(
+        `UPDATE employees SET is_active = false, updated_at = NOW()
+         WHERE hurma_employee_id IS NOT NULL
+           AND hurma_employee_id != ''
+           AND NOT (hurma_employee_id = ANY($1::text[]))`,
+        [ids]
+      );
+      if (result.rowCount > 0) {
+        logger.info({ markedInactive: result.rowCount }, 'Employees no longer in Hurma marked inactive');
+      }
     }
 
     // Seed public holidays if table is empty
@@ -325,12 +342,13 @@ async function recomputeSummaries(from, to) {
     const { rows: hRows } = await db.query('SELECT holiday_date FROM public_holidays');
     const holidaySet = new Set(hRows.map((r) => toDateString(r.holiday_date)));
 
-    // All monitored employees
+    // All monitored employees (active only)
     const { rows: employees } = await db.query(
       `SELECT e.id, e.full_name, e.redmine_user_id, e.work_hours_per_day, s.monitoring_mode
        FROM employees e
        JOIN employee_monitoring_settings s ON s.employee_id = e.id
-       WHERE s.monitoring_mode IN ('included', 'excluded', 'ignored_fulltime_external_project')`
+       WHERE e.is_active = true
+         AND s.monitoring_mode IN ('included', 'excluded', 'ignored_fulltime_external_project')`
     );
 
     for (const emp of employees) {

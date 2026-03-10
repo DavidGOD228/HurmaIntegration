@@ -34,11 +34,12 @@ async function detectContradictions(from, to) {
   const { rows: hRows } = await db.query('SELECT holiday_date FROM public_holidays');
   const holidaySet = new Set(hRows.map((r) => toDateString(r.holiday_date)));
 
-  // All employees with a monitoring setting (any mode)
+  // All active employees with a monitoring setting (any mode)
   const { rows: employees } = await db.query(
     `SELECT e.id, e.full_name, e.redmine_user_id, e.work_hours_per_day, s.monitoring_mode
      FROM employees e
-     JOIN employee_monitoring_settings s ON s.employee_id = e.id`
+     JOIN employee_monitoring_settings s ON s.employee_id = e.id
+     WHERE e.is_active = true`
   );
 
   for (const emp of employees) {

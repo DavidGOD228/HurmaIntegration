@@ -115,7 +115,7 @@ async function getDailySummary(dateStr, filters = {}) {
     FROM employees e
     JOIN employee_monitoring_settings s ON s.employee_id = e.id
     LEFT JOIN daily_employee_summary d ON d.employee_id = e.id AND d.summary_date = $1
-    WHERE s.monitoring_mode = 'included'
+    WHERE s.monitoring_mode = 'included' AND e.is_active = true
   `;
   const params = [dateStr];
 
@@ -163,7 +163,7 @@ async function getMonthlySummary(yearMonth, filters = {}) {
     JOIN employee_monitoring_settings s ON s.employee_id = e.id
     LEFT JOIN daily_employee_summary d ON d.employee_id = e.id
       AND d.summary_date >= $1 AND d.summary_date <= $2
-    WHERE s.monitoring_mode = 'included'
+    WHERE s.monitoring_mode = 'included' AND e.is_active = true
     GROUP BY e.id, e.full_name, e.email, e.department, s.monitoring_mode, e.redmine_user_id
   `;
   const params = [from, to];
