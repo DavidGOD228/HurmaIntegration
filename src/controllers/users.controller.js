@@ -6,7 +6,7 @@ const logger = require('../utils/logger');
 const config = require('../config');
 
 const registerSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).optional().default('Recruiter'),
   email: z.string().email().optional(),
   fireflies_api_key: z.string().min(1),
   fireflies_webhook_secret: z.string().min(1),

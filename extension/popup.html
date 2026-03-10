@@ -8,7 +8,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      width: 360px;
+      width: 340px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       font-size: 13px;
       color: #1a1a2e;
@@ -23,9 +23,9 @@
       align-items: center;
       gap: 10px;
     }
-    .header h1 { font-size: 15px; font-weight: 600; }
-    .header .dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; flex-shrink: 0; }
-    .header .dot.red { background: #f87171; }
+    .header h1 { font-size: 15px; font-weight: 600; flex: 1; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; flex-shrink: 0; }
+    .dot.red { background: #f87171; }
 
     .section {
       padding: 16px;
@@ -34,9 +34,19 @@
     }
     .section:last-child { border-bottom: none; }
 
-    label { display: block; font-weight: 500; margin-bottom: 5px; color: #374151; }
+    h2 {
+      font-size: 11px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 10px;
+    }
 
-    input, textarea {
+    label { display: block; font-weight: 500; margin-bottom: 4px; color: #374151; }
+    .hint { font-size: 11px; color: #9ca3af; margin-bottom: 10px; margin-top: -2px; }
+
+    input {
       width: 100%;
       padding: 8px 10px;
       border: 1px solid #d1d5db;
@@ -46,7 +56,8 @@
       outline: none;
       transition: border-color .15s;
     }
-    input:focus, textarea:focus { border-color: #2d5be3; }
+    input:focus { border-color: #2d5be3; box-shadow: 0 0 0 2px #dbeafe; }
+    input:last-of-type { margin-bottom: 0; }
 
     button {
       width: 100%;
@@ -60,6 +71,7 @@
       cursor: pointer;
     }
     button:hover { background: #2448c0; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
     button.secondary {
       background: transparent;
       color: #6b7280;
@@ -81,24 +93,17 @@
       margin-bottom: 8px;
     }
 
-    .copy-btn {
-      background: #f3f4f6;
-      color: #374151;
-      border: 1px solid #d1d5db;
-      font-weight: 400;
-    }
-    .copy-btn:hover { background: #e5e7eb; }
-
     .badge {
       display: inline-block;
       padding: 2px 7px;
       border-radius: 10px;
       font-size: 11px;
       font-weight: 600;
+      white-space: nowrap;
     }
-    .badge.done    { background: #dcfce7; color: #166534; }
-    .badge.failed  { background: #fee2e2; color: #991b1b; }
-    .badge.pending { background: #fef9c3; color: #854d0e; }
+    .badge.done      { background: #dcfce7; color: #166534; }
+    .badge.failed    { background: #fee2e2; color: #991b1b; }
+    .badge.pending   { background: #fef9c3; color: #854d0e; }
     .badge.duplicate { background: #e0e7ff; color: #3730a3; }
 
     .activity-item {
@@ -110,7 +115,7 @@
       gap: 8px;
     }
     .activity-item:last-child { border-bottom: none; }
-    .activity-title { font-size: 12px; color: #374151; flex: 1; min-width: 0; }
+    .activity-title { font-size: 12px; color: #374151; flex: 1; min-width: 0; overflow: hidden; }
     .activity-title span { display: block; color: #9ca3af; font-size: 11px; margin-top: 2px; }
 
     .empty { color: #9ca3af; text-align: center; padding: 12px 0; font-size: 12px; }
@@ -122,19 +127,20 @@
       padding: 8px 10px;
       font-size: 12px;
       color: #1e40af;
-      margin-bottom: 0;
     }
 
-    .error-msg { color: #dc2626; font-size: 12px; margin-top: 6px; display: none; }
+    .error-msg  { color: #dc2626; font-size: 12px; margin-top: 8px; display: none; }
     .success-msg { color: #16a34a; font-size: 12px; margin-top: 6px; display: none; }
 
-    #setup-section h2, #main-section h2 {
-      font-size: 12px;
-      font-weight: 600;
-      color: #6b7280;
-      text-transform: uppercase;
-      letter-spacing: .04em;
-      margin-bottom: 10px;
+    .step-note {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 11px;
+      color: #92400e;
+      margin-top: 10px;
+      line-height: 1.5;
     }
   </style>
 </head>
@@ -146,24 +152,26 @@
   <h1>HurmaRecorder</h1>
 </div>
 
-<!-- SETUP (shown when not registered) -->
+<!-- SETUP (shown before registration) -->
 <div id="setup-section">
   <div class="section">
-    <h2>First-time setup</h2>
-    <label>Your name</label>
-    <input id="setup-name" type="text" placeholder="e.g. Olena Recruiter">
+    <h2>Connect your Fireflies account</h2>
 
     <label>Fireflies API Key</label>
-    <input id="setup-api-key" type="password" placeholder="From Fireflies → API settings">
+    <div class="hint">Fireflies → Integrations → API → copy your key</div>
+    <input id="setup-api-key" type="password" placeholder="Paste API key here">
 
-    <label>Fireflies Webhook Secret</label>
-    <input id="setup-secret" type="password" placeholder="You'll set this same value in Fireflies">
+    <label style="margin-top:10px">Webhook Secret</label>
+    <div class="hint">Make up any password, e.g. <code>MySecret2024</code> — you'll paste it in Fireflies too</div>
+    <input id="setup-secret" type="password" placeholder="e.g. MySecret2024">
 
-    <label>Backend URL</label>
-    <input id="setup-backend" type="text" placeholder="https://hurmarecorder.development-test.website">
-
-    <button id="register-btn">Register</button>
+    <button id="register-btn" style="margin-top:14px">Connect</button>
     <div id="setup-error" class="error-msg"></div>
+
+    <div class="step-note">
+      After clicking Connect you'll get a Webhook URL.<br>
+      Paste it (and the same secret) into <b>Fireflies → Settings → Webhook</b>.
+    </div>
   </div>
 </div>
 
@@ -174,15 +182,15 @@
   <div class="section">
     <h2>Your webhook URL</h2>
     <div id="webhook-url" class="url-box"></div>
-    <button class="copy-btn" id="copy-btn">Copy URL</button>
-    <div id="copy-success" class="success-msg">Copied!</div>
-    <p style="color:#6b7280;font-size:11px;margin-top:8px">
-      Paste this into Fireflies → Settings → Webhook.<br>
-      Use your webhook secret as the "Secret" there.
+    <button id="copy-btn" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;font-weight:400">Copy</button>
+    <div id="copy-success" class="success-msg">Copied to clipboard!</div>
+    <p style="color:#6b7280;font-size:11px;margin-top:8px;line-height:1.5">
+      Go to <b>Fireflies → Settings → Webhook</b>.<br>
+      Paste this URL and your webhook secret there.
     </p>
   </div>
 
-  <!-- Current candidate (injected by content script) -->
+  <!-- Active candidate (detected by content script) -->
   <div id="candidate-section" class="section" style="display:none">
     <h2>Current candidate</h2>
     <div id="candidate-bar" class="candidate-bar"></div>
@@ -190,15 +198,17 @@
 
   <!-- Recent activity -->
   <div class="section">
-    <h2>Recent activity</h2>
+    <h2>Recent meetings</h2>
     <div id="activity-list"><div class="empty">No activity yet</div></div>
   </div>
 
   <div class="section">
-    <button class="secondary" id="logout-btn">Reset / switch account</button>
+    <button class="secondary" id="logout-btn">Disconnect / switch account</button>
   </div>
 </div>
 
+<!-- config.js must come first so BACKEND_URL is available to popup.js -->
+<script src="config.js"></script>
 <script src="popup.js"></script>
 </body>
 </html>
