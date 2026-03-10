@@ -45,13 +45,16 @@ async function getEmployees({ page = 1, perPage = 100 } = {}) {
     const { data } = await getClient().get(`/api/${v}/employees`, {
       params: { page, per_page: perPage },
     });
-    // Hurma wraps arrays; handle both { employees: [...], total: N } and plain arrays.
+    // Hurma v1 wraps as { result: { data: [...], current_page, total } }; v3 may differ.
     if (Array.isArray(data)) {
       return { employees: data, total: data.length, page, perPage };
     }
+    const result = data.result || data;
+    const employees = result.data || data.employees || data.data || [];
+    const total = result.total ?? data.total ?? data.meta?.total ?? employees.length;
     return {
-      employees: data.employees || data.data || [],
-      total:     data.total    || data.meta?.total || 0,
+      employees,
+      total: typeof total === 'number' ? total : employees.length,
       page,
       perPage,
     };
@@ -118,13 +121,21 @@ async function getAbsences({ from, to, page = 1, perPage = 100, employeeId } = {
     if (Array.isArray(data)) {
       return { absences: data, total: data.length, page, perPage };
     }
+    const result = data.result || data;
+    const absences = result.data || data.absences || data.data || [];
+    const total = result.total ?? data.total ?? data.meta?.total ?? absences.length;
     return {
-      absences: data.absences || data.data || [],
-      total:    data.total    || data.meta?.total || 0,
+      absences,
+      total: typeof total === 'number' ? total : absences.length,
       page,
       perPage,
     };
   } catch (err) {
+    // v1 may not expose /absences; 404 is non-fatal for sync
+    if (err.response?.status === 404) {
+      logger.warn({ from, to }, 'Hurma /absences not found (v1 may use per-employee endpoints)');
+      return { absences: [], total: 0, page, perPage };
+    }
     logger.error({ err, from, to }, 'Hurma getAbsences failed');
     throw err;
   }

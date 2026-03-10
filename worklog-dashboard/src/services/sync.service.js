@@ -70,7 +70,7 @@ async function syncEmployees() {
       const email     = (emp.email || emp.work_email || '').toLowerCase().trim();
       const dept      = emp.department?.name || emp.department || null;
       const position  = emp.position?.name  || emp.position   || null;
-      const isActive  = emp.is_active ?? emp.active ?? true;
+      const isActive  = !emp.fired_date && (emp.is_active ?? emp.active ?? true);
 
       // Auto-map to Redmine user
       let redmineUser = null;
