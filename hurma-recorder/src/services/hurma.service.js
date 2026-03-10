@@ -5,7 +5,7 @@
  *
  * Authentication: Hurma v3 API uses OAuth2 (password grant).
  * Flow:
- *   1. POST /api/v3/oauth/token with grant_type=password + client credentials + user email/password
+ *   1. POST /oauth/token with grant_type=client_credentials + client_id + client_secret
  *   2. Get access_token (expires in 3600s) + refresh_token
  *   3. On expiry, use refresh_token to get a new access_token
  *   4. Tokens are stored per-user in the DB
@@ -27,7 +27,7 @@ const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000; // refresh 5 min before expiry
 async function fetchTokensWithClientCredentials() {
   try {
     const res = await axios.post(
-      `${config.HURMA_BASE_URL}/api/v3/oauth/token`,
+      `${config.HURMA_BASE_URL}/oauth/token`,
       {
         grant_type: 'client_credentials',
         client_id: String(config.HURMA_OAUTH_CLIENT_ID),
@@ -53,7 +53,7 @@ async function fetchTokensWithClientCredentials() {
  */
 async function fetchTokensWithRefresh(refreshToken) {
   const res = await axios.post(
-    `${config.HURMA_BASE_URL}/api/v3/oauth/token`,
+    `${config.HURMA_BASE_URL}/oauth/token`,
     {
       grant_type: 'refresh_token',
       client_id: String(config.HURMA_OAUTH_CLIENT_ID),
