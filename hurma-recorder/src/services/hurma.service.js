@@ -25,18 +25,29 @@ const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000; // refresh 5 min before expiry
  * Exchange credentials for OAuth tokens using password grant.
  */
 async function fetchTokensWithPassword(email, password) {
-  const res = await axios.post(
-    `${config.HURMA_BASE_URL}/api/v3/oauth/token`,
-    {
-      grant_type: 'password',
-      client_id: config.HURMA_OAUTH_CLIENT_ID,
-      client_secret: config.HURMA_OAUTH_CLIENT_SECRET,
-      username: email,
-      password,
-    },
-    { headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, timeout: 15000 },
-  );
-  return res.data;
+  try {
+    const res = await axios.post(
+      `${config.HURMA_BASE_URL}/api/v3/oauth/token`,
+      {
+        grant_type: 'password',
+        client_id: String(config.HURMA_OAUTH_CLIENT_ID),
+        client_secret: config.HURMA_OAUTH_CLIENT_SECRET,
+        username: email,
+        password,
+      },
+      { headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, timeout: 15000 },
+    );
+    return res.data;
+  } catch (err) {
+    const body = err.response?.data;
+    logger.error(
+      { status: err.response?.status, body: JSON.stringify(body) },
+      'Hurma OAuth password grant failed',
+    );
+    throw new Error(
+      `Hurma OAuth error ${err.response?.status}: ${JSON.stringify(body)}`,
+    );
+  }
 }
 
 /**
@@ -47,7 +58,7 @@ async function fetchTokensWithRefresh(refreshToken) {
     `${config.HURMA_BASE_URL}/api/v3/oauth/token`,
     {
       grant_type: 'refresh_token',
-      client_id: config.HURMA_OAUTH_CLIENT_ID,
+      client_id: String(config.HURMA_OAUTH_CLIENT_ID),
       client_secret: config.HURMA_OAUTH_CLIENT_SECRET,
       refresh_token: refreshToken,
     },
