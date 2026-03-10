@@ -22,7 +22,11 @@ const configSchema = z.object({
   FIREFLIES_WEBHOOK_SECRET: z.string().min(1, 'FIREFLIES_WEBHOOK_SECRET is required'),
 
   HURMA_BASE_URL: z.string().url('HURMA_BASE_URL must be a valid URL (e.g. https://yourcompany.hurma.work)'),
-  HURMA_API_TOKEN: z.string().min(1, 'HURMA_API_TOKEN is required'),
+  HURMA_API_TOKEN: z.string().optional().default(''),
+
+  // Hurma v3 OAuth2 application credentials (from Settings → API v3 tab)
+  HURMA_OAUTH_CLIENT_ID: z.coerce.number().optional(),
+  HURMA_OAUTH_CLIENT_SECRET: z.string().optional(),
 
   DEFAULT_TIMEZONE: z.string().default('UTC'),
   APP_BASE_URL: optionalUrl,

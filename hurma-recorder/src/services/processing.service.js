@@ -116,9 +116,6 @@ async function processFirefliesWebhook(
     return;
   }
 
-  // Per-user Hurma token (comments appear under the recruiter's name)
-  const hurmaApiToken = user?.hurma_api_token || null;
-
   // ── Step 2: Resolve candidate ID ─────────────────────────────────────────
   const description =
     webhookBody?.meetingDescription || webhookBody?.meeting_description || webhookBody?.description || '';
@@ -126,7 +123,7 @@ async function processFirefliesWebhook(
   const { candidateId, matchedBy } = await matchingService.resolveCandidateId(
     transcript,
     webhookBody,
-    hurmaApiToken,
+    user,
   );
 
   // ── Step 3: Upsert meeting record ─────────────────────────────────────────
@@ -174,7 +171,7 @@ async function processFirefliesWebhook(
   // ── Step 6: Verify candidate exists in Hurma ─────────────────────────────
   let hurmaCandidate;
   try {
-    hurmaCandidate = await hurmaService.getCandidateById(candidateId, hurmaApiToken);
+    hurmaCandidate = await hurmaService.getCandidateById(candidateId, user);
   } catch (err) {
     logger.error({ candidateId, err: err.message }, 'Hurma candidate lookup failed');
     await webhooksQ.updateWebhookStatus(webhookId, 'failed', err.message);
@@ -215,7 +212,7 @@ async function processFirefliesWebhook(
   // ── Step 8: Post comment to Hurma ─────────────────────────────────────────
   let hurmaResponse;
   try {
-    hurmaResponse = await hurmaService.createCandidateComment(candidateId, noteContent, hurmaApiToken);
+    hurmaResponse = await hurmaService.createCandidateComment(candidateId, noteContent, user);
   } catch (err) {
     logger.error({ candidateId, err: err.message }, 'Hurma createCandidateComment failed');
     await meetingsQ.updateMeetingStatus(meetingRow.id, 'failed');

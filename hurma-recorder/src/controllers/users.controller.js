@@ -4,6 +4,7 @@ const { z } = require('zod');
 const usersQ = require('../db/queries/users');
 const webhooksQ = require('../db/queries/webhooks');
 const processingService = require('../services/processing.service');
+const hurmaService = require('../services/hurma.service');
 const logger = require('../utils/logger');
 const config = require('../config');
 
@@ -152,10 +153,47 @@ async function triggerProcessing(req, res, next) {
   }
 }
 
+const oauthSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
+/**
+ * POST /api/users/hurma-oauth
+ * Authorization: Bearer <webhook_token>
+ * Body: { email: "your.hurma@email.com", password: "yourpassword" }
+ *
+ * One-time setup: exchanges Hurma credentials for OAuth tokens and stores them.
+ * After this, all Hurma API calls use auto-refreshing JWT tokens.
+ */
+async function setupHurmaOAuth(req, res, next) {
+  const token = extractToken(req);
+  if (!token) return res.status(401).json({ error: 'Missing Authorization: Bearer <token>' });
+
+  try {
+    const user = await usersQ.findByToken(token);
+    if (!user) return res.status(404).json({ error: 'User not found or inactive' });
+
+    const parsed = oauthSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
+    }
+
+    const { email, password } = parsed.data;
+    await hurmaService.setupOAuth(user.id, email, password);
+
+    logger.info({ userId: user.id }, 'Hurma OAuth setup complete');
+    return res.json({ status: 'ok', message: 'Hurma OAuth tokens configured. Integration is now active.' });
+  } catch (err) {
+    logger.error({ err: err.message }, 'Hurma OAuth setup failed');
+    return res.status(400).json({ error: 'OAuth setup failed', detail: err.message });
+  }
+}
+
 function extractToken(req) {
   const auth = req.headers.authorization || '';
   if (auth.startsWith('Bearer ')) return auth.slice(7);
   return null;
 }
 
-module.exports = { register, getMe, triggerProcessing };
+module.exports = { register, getMe, triggerProcessing, setupHurmaOAuth };
