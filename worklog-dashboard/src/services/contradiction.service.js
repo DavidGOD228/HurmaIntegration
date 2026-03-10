@@ -228,7 +228,13 @@ async function upsertContradiction({
        (employee_id, contradiction_date, contradiction_type, severity, description,
         related_absence_id, related_time_entry_id)
      VALUES ($1,$2,$3,$4,$5,$6,$7)
-     ON CONFLICT DO NOTHING`,
+     ON CONFLICT (employee_id, contradiction_date, contradiction_type)
+     DO UPDATE SET
+       severity = EXCLUDED.severity,
+       description = EXCLUDED.description,
+       related_absence_id = EXCLUDED.related_absence_id,
+       related_time_entry_id = EXCLUDED.related_time_entry_id,
+       is_resolved = false`,
     [employeeId, date, type, severity, description, absenceId || null, timeEntryId || null]
   );
 }
