@@ -18,5 +18,6 @@ router.use(require('express').json({ limit: '512kb' }));
 
 router.post('/users/register', usersController.register);
 router.get('/users/me', usersController.getMe);
+router.post('/users/trigger', usersController.triggerProcessing);
 
 module.exports = router;

@@ -2,6 +2,8 @@
 
 const { z } = require('zod');
 const usersQ = require('../db/queries/users');
+const webhooksQ = require('../db/queries/webhooks');
+const processingService = require('../services/processing.service');
 const logger = require('../utils/logger');
 const config = require('../config');
 
@@ -80,10 +82,80 @@ async function getMe(req, res, next) {
   }
 }
 
+const triggerSchema = z.object({
+  transcript_id: z.string().min(1),
+  meeting_id: z.string().min(1).optional(),
+});
+
+/**
+ * POST /api/users/trigger
+ * Authorization: Bearer <webhook_token>
+ * Body: { transcript_id, meeting_id? }
+ *
+ * Manually kick off processing for a Fireflies transcript that was missed
+ * (e.g. webhook was not configured when the meeting was recorded).
+ */
+async function triggerProcessing(req, res, next) {
+  const token = extractToken(req);
+  if (!token) return res.status(401).json({ error: 'Missing Authorization: Bearer <token>' });
+
+  try {
+    const user = await usersQ.findByToken(token);
+    if (!user) return res.status(404).json({ error: 'User not found or inactive' });
+
+    const parsed = triggerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
+    }
+
+    const { transcript_id, meeting_id } = parsed.data;
+    const effectiveMeetingId = meeting_id || transcript_id;
+
+    // Persist a webhook record so processing results are tracked
+    const webhookRow = await webhooksQ.insertWebhook({
+      source: 'manual_trigger',
+      eventType: 'Transcription complete',
+      fireflysMeetingId: effectiveMeetingId,
+      fireflysTranscriptId: transcript_id,
+      payloadJson: { transcript_id, meeting_id: effectiveMeetingId, triggered_by: 'api' },
+      signatureValid: true,
+      userId: user.id,
+    });
+
+    logger.info(
+      { webhookId: webhookRow.id, transcript_id, userId: user.id },
+      'Manual trigger requested',
+    );
+
+    // Acknowledge immediately, process async
+    res.status(202).json({
+      status: 'accepted',
+      webhook_id: webhookRow.id,
+      message: 'Processing started — check Recent Meetings in the extension in ~30 seconds.',
+    });
+
+    setImmediate(() => {
+      processingService
+        .processFirefliesWebhook(
+          webhookRow.id,
+          effectiveMeetingId,
+          transcript_id,
+          { eventType: 'Transcription complete', meetingId: effectiveMeetingId, transcriptId: transcript_id },
+          user,
+        )
+        .catch((err) => {
+          logger.error({ webhookId: webhookRow.id, err: err.message }, 'Unhandled error in manual trigger processing');
+        });
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 function extractToken(req) {
   const auth = req.headers.authorization || '';
   if (auth.startsWith('Bearer ')) return auth.slice(7);
   return null;
 }
 
-module.exports = { register, getMe };
+module.exports = { register, getMe, triggerProcessing };
