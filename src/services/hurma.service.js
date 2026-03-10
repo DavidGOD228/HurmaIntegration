@@ -30,11 +30,14 @@ const axios = require('axios');
 const config = require('../config');
 const logger = require('../utils/logger');
 
-function buildClient() {
+/**
+ * @param {string} [apiToken] - Per-user Hurma token. Falls back to global env token.
+ */
+function buildClient(apiToken) {
   return axios.create({
     baseURL: config.HURMA_BASE_URL,
     headers: {
-      Authorization: `Bearer ${config.HURMA_API_TOKEN}`,
+      Authorization: `Bearer ${apiToken || config.HURMA_API_TOKEN}`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
@@ -46,10 +49,11 @@ function buildClient() {
  * Verify a candidate exists in Hurma.
  *
  * @param {string} candidateId - Hurma alphanumeric candidate ID
+ * @param {string} [apiToken]
  * @returns {Promise<object|null>} Candidate data or null if not found
  */
-async function getCandidateById(candidateId) {
-  const client = buildClient();
+async function getCandidateById(candidateId, apiToken) {
+  const client = buildClient(apiToken);
 
   logger.info({ candidateId }, 'Looking up Hurma candidate');
 
@@ -71,13 +75,13 @@ async function getCandidateById(candidateId) {
 
 /**
  * Search for a candidate by email address.
- * Used as a last-resort fallback when no candidate ID is found in meeting metadata.
  *
  * @param {string} email
+ * @param {string} [apiToken]
  * @returns {Promise<object|null>} First matching candidate or null
  */
-async function findCandidateByEmail(email) {
-  const client = buildClient();
+async function findCandidateByEmail(email, apiToken) {
+  const client = buildClient(apiToken);
 
   logger.info({ email }, 'Searching Hurma candidate by email');
 
@@ -99,13 +103,13 @@ async function findCandidateByEmail(email) {
 
 /**
  * Search for a candidate by full name.
- * Used as a fallback when email search returns no results.
  *
  * @param {string} name
+ * @param {string} [apiToken]
  * @returns {Promise<object|null>} First matching candidate or null
  */
-async function findCandidateByName(name) {
-  const client = buildClient();
+async function findCandidateByName(name, apiToken) {
+  const client = buildClient(apiToken);
 
   logger.info({ name }, 'Searching Hurma candidate by name');
 
@@ -136,17 +140,15 @@ async function findCandidateByName(name) {
 
 /**
  * Create a comment on a candidate record in Hurma.
- *
- * Endpoint: POST /api/v3/candidates/{id}/comments
- * Body:     { comment: "..." }
- * Response: { id: <integer> }
+ * The comment appears under the name of whoever owns the apiToken.
  *
  * @param {string} candidateId  - Hurma candidate encoded ID
  * @param {string} commentText  - Plain text content of the comment
+ * @param {string} [apiToken]   - Per-user Hurma token (comment appears under their name)
  * @returns {Promise<{id: number}>}
  */
-async function createCandidateComment(candidateId, commentText) {
-  const client = buildClient();
+async function createCandidateComment(candidateId, commentText, apiToken) {
+  const client = buildClient(apiToken);
 
   logger.info({ candidateId }, 'Creating Hurma candidate comment');
 

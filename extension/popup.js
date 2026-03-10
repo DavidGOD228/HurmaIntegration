@@ -31,11 +31,12 @@ function showMain(data) {
 }
 
 $('register-btn').addEventListener('click', async () => {
-  const apiKey = $('setup-api-key').value.trim();
-  const secret = $('setup-secret').value.trim();
+  const hurmaToken = $('setup-hurma-token').value.trim();
+  const apiKey     = $('setup-api-key').value.trim();
+  const secret     = $('setup-secret').value.trim();
 
-  if (!apiKey || !secret) {
-    showError('setup-error', 'Both fields are required.');
+  if (!hurmaToken || !apiKey || !secret) {
+    showError('setup-error', 'All three fields are required.');
     return;
   }
   if (!backendUrl) {
@@ -58,6 +59,7 @@ $('register-btn').addEventListener('click', async () => {
         name: recruiterName || 'Recruiter',
         fireflies_api_key: apiKey,
         fireflies_webhook_secret: secret,
+        hurma_api_token: hurmaToken,
       }),
     });
 

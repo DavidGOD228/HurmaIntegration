@@ -3,14 +3,14 @@
 const crypto = require('crypto');
 const db = require('../index');
 
-async function createUser({ name, email, firefliesApiKey, firefliesWebhookSecret }) {
+async function createUser({ name, email, firefliesApiKey, firefliesWebhookSecret, hurmaApiToken }) {
   const webhookToken = crypto.randomBytes(32).toString('hex');
 
   const result = await db.query(
-    `INSERT INTO users (name, email, webhook_token, fireflies_api_key, fireflies_webhook_secret)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO users (name, email, webhook_token, fireflies_api_key, fireflies_webhook_secret, hurma_api_token)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id, name, email, webhook_token, created_at`,
-    [name, email || null, webhookToken, firefliesApiKey, firefliesWebhookSecret],
+    [name, email || null, webhookToken, firefliesApiKey, firefliesWebhookSecret, hurmaApiToken || null],
   );
   return result.rows[0];
 }

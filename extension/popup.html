@@ -157,12 +157,16 @@
   <div class="section">
     <h2>Connect your Fireflies account</h2>
 
-    <label>Fireflies API Key</label>
+    <label>Hurma API Token</label>
+    <div class="hint">Hurma → Profile → API token (comments will appear under your name)</div>
+    <input id="setup-hurma-token" type="password" placeholder="Paste Hurma token here">
+
+    <label style="margin-top:10px">Fireflies API Key</label>
     <div class="hint">Fireflies → Integrations → API → copy your key</div>
     <input id="setup-api-key" type="password" placeholder="Paste API key here">
 
-    <label style="margin-top:10px">Webhook Secret</label>
-    <div class="hint">Make up any password, e.g. <code>MySecret2024</code> — you'll paste it in Fireflies too</div>
+    <label style="margin-top:10px">Fireflies Webhook Secret</label>
+    <div class="hint">Make up any password — you'll paste the same in Fireflies webhook settings</div>
     <input id="setup-secret" type="password" placeholder="e.g. MySecret2024">
 
     <button id="register-btn" style="margin-top:14px">Connect</button>

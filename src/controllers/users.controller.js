@@ -10,6 +10,7 @@ const registerSchema = z.object({
   email: z.string().email().optional(),
   fireflies_api_key: z.string().min(1),
   fireflies_webhook_secret: z.string().min(1),
+  hurma_api_token: z.string().min(1),
 });
 
 /**
@@ -23,7 +24,7 @@ async function register(req, res, next) {
     return res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
   }
 
-  const { name, email, fireflies_api_key, fireflies_webhook_secret } = parsed.data;
+  const { name, email, fireflies_api_key, fireflies_webhook_secret, hurma_api_token } = parsed.data;
 
   try {
     const user = await usersQ.createUser({
@@ -31,6 +32,7 @@ async function register(req, res, next) {
       email,
       firefliesApiKey: fireflies_api_key,
       firefliesWebhookSecret: fireflies_webhook_secret,
+      hurmaApiToken: hurma_api_token,
     });
 
     const baseUrl = config.APP_BASE_URL || `http://localhost:${config.PORT}`;

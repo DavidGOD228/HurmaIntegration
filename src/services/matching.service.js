@@ -24,11 +24,12 @@ const logger = require('../utils/logger');
 /**
  * Resolve the Hurma candidate ID from available transcript and meeting metadata.
  *
- * @param {object} transcript  - Normalized Fireflies transcript object
- * @param {object} webhookBody - Raw webhook payload (may contain clientReferenceId)
+ * @param {object} transcript   - Normalized Fireflies transcript object
+ * @param {object} webhookBody  - Raw webhook payload (may contain clientReferenceId)
+ * @param {string} [hurmaToken] - Per-user Hurma API token for searches
  * @returns {Promise<{candidateId: string|null, matchedBy: string|null}>}
  */
-async function resolveCandidateId(transcript, webhookBody) {
+async function resolveCandidateId(transcript, webhookBody, hurmaToken) {
   const title = transcript.title || '';
   const description = extractDescriptionFromTranscript(transcript, webhookBody);
 
@@ -78,7 +79,7 @@ async function resolveCandidateId(transcript, webhookBody) {
     if (attendee.email === organizerEmail) continue; // skip the recruiter
 
     try {
-      const candidate = await hurmaService.findCandidateByEmail(attendee.email);
+      const candidate = await hurmaService.findCandidateByEmail(attendee.email, hurmaToken);
       if (candidate) {
         const candidateId = String(candidate.id);
         logger.info({ email: attendee.email, candidateId }, 'Candidate matched via Hurma email search');
@@ -101,7 +102,7 @@ async function resolveCandidateId(transcript, webhookBody) {
 
   for (const name of namesToTry) {
     try {
-      const candidate = await hurmaService.findCandidateByName(name);
+      const candidate = await hurmaService.findCandidateByName(name, hurmaToken);
       if (candidate) {
         const candidateId = String(candidate.id);
         logger.info({ name, candidateId }, 'Candidate matched via Hurma name search');
