@@ -17,7 +17,7 @@
 const axios = require('axios');
 const config = require('../config');
 const logger = require('../utils/logger');
-const pool = require('../db/pool');
+const db = require('../db');
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000; // refresh 5 min before expiry
 
@@ -61,7 +61,7 @@ async function fetchTokensWithRefresh(refreshToken) {
  */
 async function saveTokens(userId, tokenData) {
   const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000);
-  await pool.query(
+  await db.query(
     `UPDATE users
      SET hurma_oauth_access_token    = $1,
          hurma_oauth_refresh_token   = $2,
