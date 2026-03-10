@@ -1,5 +1,26 @@
+# Dependencies
 node_modules/
+**/node_modules/
+
+# Build output
+worklog-dashboard/public/
+**/dist/
+
+# Environment files (never commit secrets)
 .env
+**/.env
+
+# Logs
 *.log
-dist/
+**/logs/
+
+# macOS
 .DS_Store
+**/.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Extension zips
+*.zip
