@@ -10,7 +10,8 @@
  * Set HURMA_HR_API_VERSION=v1 (default) in .env to use /api/v1/* endpoints.
  * If your plan only exposes v3, set HURMA_HR_API_VERSION=v3.
  *
- * All requests use: Authorization: Bearer <HURMA_API_TOKEN>
+ * Public API v1 expects header: token (not Authorization: Bearer)
+ * See https://swagger-ui.hurma.work/#/Employees/1dce49c8aac6c9a42fcfcc681935049d
  */
 const axios = require('axios');
 const config = require('../config');
@@ -20,7 +21,7 @@ function getClient() {
   return axios.create({
     baseURL: config.HURMA_BASE_URL.replace(/\/$/, ''),
     headers: {
-      Authorization: `Bearer ${config.HURMA_API_TOKEN}`,
+      token: config.HURMA_API_TOKEN,
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
