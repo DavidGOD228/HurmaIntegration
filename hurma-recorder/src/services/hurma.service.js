@@ -24,16 +24,14 @@ const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000; // refresh 5 min before expiry
 /**
  * Exchange credentials for OAuth tokens using password grant.
  */
-async function fetchTokensWithPassword(email, password) {
+async function fetchTokensWithClientCredentials() {
   try {
     const res = await axios.post(
       `${config.HURMA_BASE_URL}/api/v3/oauth/token`,
       {
-        grant_type: 'password',
+        grant_type: 'client_credentials',
         client_id: String(config.HURMA_OAUTH_CLIENT_ID),
         client_secret: config.HURMA_OAUTH_CLIENT_SECRET,
-        username: email,
-        password,
       },
       { headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, timeout: 15000 },
     );
@@ -42,7 +40,7 @@ async function fetchTokensWithPassword(email, password) {
     const body = err.response?.data;
     logger.error(
       { status: err.response?.status, body: JSON.stringify(body) },
-      'Hurma OAuth password grant failed',
+      'Hurma OAuth client_credentials grant failed',
     );
     throw new Error(
       `Hurma OAuth error ${err.response?.status}: ${JSON.stringify(body)}`,
@@ -85,16 +83,18 @@ async function saveTokens(userId, tokenData) {
 
 /**
  * One-time OAuth setup for a user.
- * Call this when the user provides their Hurma email + password.
+ * Uses client_credentials grant (Hurma "API" type client).
  *
  * @param {number} userId
- * @param {string} email
- * @param {string} password
  * @returns {Promise<void>}
  */
-async function setupOAuth(userId, email, password) {
+async function setupOAuth(userId) {
   logger.info({ userId }, 'Setting up Hurma OAuth tokens');
-  const tokenData = await fetchTokensWithPassword(email, password);
+  const tokenData = await fetchTokensWithClientCredentials();
+  // client_credentials tokens don't have a refresh_token — re-fetch on expiry
+  if (!tokenData.refresh_token) {
+    tokenData.refresh_token = null;
+  }
   await saveTokens(userId, tokenData);
   logger.info({ userId }, 'Hurma OAuth tokens saved');
 }
@@ -119,7 +119,7 @@ async function getValidAccessToken(user) {
     }
   }
 
-  // Refresh using refresh_token
+  // Refresh using refresh_token if available
   if (hurma_oauth_refresh_token) {
     logger.info({ userId: user.id }, 'Refreshing Hurma OAuth access token');
     try {
@@ -127,15 +127,21 @@ async function getValidAccessToken(user) {
       const { accessToken } = await saveTokens(user.id, tokenData);
       return accessToken;
     } catch (err) {
-      logger.error({ userId: user.id, err: err.message }, 'Hurma OAuth refresh failed');
-      throw new Error(
-        `Hurma OAuth token refresh failed: ${err.message}. Re-run OAuth setup via POST /api/users/hurma-oauth`,
-      );
+      logger.warn({ userId: user.id, err: err.message }, 'Hurma OAuth refresh failed — retrying with client_credentials');
     }
   }
 
+  // client_credentials grant: re-fetch access token (no refresh token for this grant type)
+  if (config.HURMA_OAUTH_CLIENT_ID && config.HURMA_OAUTH_CLIENT_SECRET) {
+    logger.info({ userId: user.id }, 'Fetching new Hurma OAuth token via client_credentials');
+    const tokenData = await fetchTokensWithClientCredentials();
+    if (!tokenData.refresh_token) tokenData.refresh_token = null;
+    const { accessToken } = await saveTokens(user.id, tokenData);
+    return accessToken;
+  }
+
   throw new Error(
-    'No Hurma OAuth tokens configured. Call POST /api/users/hurma-oauth with your Hurma email + password.',
+    'No Hurma OAuth tokens configured. Set HURMA_OAUTH_CLIENT_ID and HURMA_OAUTH_CLIENT_SECRET in .env, then call POST /api/users/hurma-oauth',
   );
 }
 

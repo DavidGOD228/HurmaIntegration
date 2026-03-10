@@ -153,17 +153,12 @@ async function triggerProcessing(req, res, next) {
   }
 }
 
-const oauthSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-});
-
 /**
  * POST /api/users/hurma-oauth
  * Authorization: Bearer <webhook_token>
- * Body: { email: "your.hurma@email.com", password: "yourpassword" }
+ * Body: {} (no credentials needed — uses client_credentials grant from .env)
  *
- * One-time setup: exchanges Hurma credentials for OAuth tokens and stores them.
+ * One-time setup: fetches OAuth token using client_credentials and stores it.
  * After this, all Hurma API calls use auto-refreshing JWT tokens.
  */
 async function setupHurmaOAuth(req, res, next) {
@@ -174,13 +169,7 @@ async function setupHurmaOAuth(req, res, next) {
     const user = await usersQ.findByToken(token);
     if (!user) return res.status(404).json({ error: 'User not found or inactive' });
 
-    const parsed = oauthSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
-    }
-
-    const { email, password } = parsed.data;
-    await hurmaService.setupOAuth(user.id, email, password);
+    await hurmaService.setupOAuth(user.id);
 
     logger.info({ userId: user.id }, 'Hurma OAuth setup complete');
     return res.json({ status: 'ok', message: 'Hurma OAuth tokens configured. Integration is now active.' });
