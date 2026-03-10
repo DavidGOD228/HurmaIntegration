@@ -95,7 +95,14 @@ async function handleFirefliesWebhook(req, res, next) {
   res.status(200).json({ status: 'accepted', webhookId: webhookRow.id });
 
   // ── Filter event type ─────────────────────────────────────────────────────
-  const TRANSCRIPTION_EVENTS = ['Transcription complete', 'transcription_complete', 'TRANSCRIPTION_COMPLETE'];
+  const TRANSCRIPTION_EVENTS = [
+    'Transcription complete',
+    'Transcription completed',
+    'transcription_complete',
+    'transcription_completed',
+    'TRANSCRIPTION_COMPLETE',
+    'TRANSCRIPTION_COMPLETED',
+  ];
   if (!TRANSCRIPTION_EVENTS.includes(eventType)) {
     await webhooksQ.updateWebhookStatus(webhookRow.id, 'skipped', `Unsupported event: ${eventType}`);
     return;
