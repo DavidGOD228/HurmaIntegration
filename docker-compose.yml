@@ -7,9 +7,9 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB:       hurma_recorder
-      POSTGRES_USER:     postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    POSTGRES_DB:       hurma_recorder
+    POSTGRES_USER:     hurma_recorder
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -34,7 +34,7 @@ services:
       postgres: { condition: service_healthy }
     env_file: .env
     environment:
-      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/hurma_recorder
+      DATABASE_URL: postgres://hurma_recorder:${POSTGRES_PASSWORD}@postgres:5432/hurma_recorder
     command: ["node", "src/db/migrate.js"]
 
   migrate-worklog:
@@ -45,7 +45,7 @@ services:
       postgres: { condition: service_healthy }
     env_file: .env
     environment:
-      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/worklog_dashboard
+      DATABASE_URL: postgres://hurma_recorder:${POSTGRES_PASSWORD}@postgres:5432/worklog_dashboard
     command: ["node", "src/db/migrate.js"]
 
   # ── hurma-recorder ───────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ services:
     environment:
       PORT:         ${HURMA_RECORDER_PORT:-3000}
       NODE_ENV:     production
-      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/hurma_recorder
+      DATABASE_URL: postgres://hurma_recorder:${POSTGRES_PASSWORD}@postgres:5432/hurma_recorder
     ports:
       - "127.0.0.1:${HURMA_RECORDER_PORT:-3000}:${HURMA_RECORDER_PORT:-3000}"
     healthcheck:
@@ -82,7 +82,7 @@ services:
     environment:
       PORT:                       ${WORKLOG_PORT:-3200}
       NODE_ENV:                   production
-      DATABASE_URL:               postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/worklog_dashboard
+      DATABASE_URL:               postgres://hurma_recorder:${POSTGRES_PASSWORD}@postgres:5432/worklog_dashboard
       HURMA_BASE_URL:             ${HURMA_BASE_URL}
       HURMA_API_TOKEN:            ${HURMA_API_TOKEN}
       HURMA_HR_API_VERSION:       ${HURMA_HR_API_VERSION:-v1}
