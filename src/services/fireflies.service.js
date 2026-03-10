@@ -6,6 +6,7 @@ const logger = require('../utils/logger');
 
 const FIREFLIES_GRAPHQL_URL = 'https://api.fireflies.ai/graphql';
 
+// Core fields available on all Fireflies plans
 const TRANSCRIPT_QUERY = `
   query GetTranscript($transcriptId: String!) {
     transcript(id: $transcriptId) {
@@ -29,12 +30,30 @@ const TRANSCRIPT_QUERY = `
         topics_discussed
         keywords
       }
-      sentences {
-        index
-        speaker_name
-        text
-        start_time
-        end_time
+    }
+  }
+`;
+
+// Fallback query without optional/plan-gated fields
+const TRANSCRIPT_QUERY_MINIMAL = `
+  query GetTranscript($transcriptId: String!) {
+    transcript(id: $transcriptId) {
+      id
+      title
+      date
+      duration
+      transcript_url
+      audio_url
+      video_url
+      meeting_attendees {
+        displayName
+        email
+      }
+      summary {
+        short_summary
+        action_items
+        topics_discussed
+        keywords
       }
     }
   }
@@ -67,13 +86,39 @@ async function fetchTranscript(transcriptId, apiKey) {
 
   logger.info({ transcriptId }, 'Fetching Fireflies transcript');
 
-  const response = await client.post('', {
-    query: TRANSCRIPT_QUERY,
-    variables: { transcriptId },
-  });
+  // Try full query first; fall back to minimal if the API rejects fields
+  let response;
+  let usedMinimal = false;
+
+  try {
+    response = await client.post('', {
+      query: TRANSCRIPT_QUERY,
+      variables: { transcriptId },
+    });
+  } catch (err) {
+    if (err.response?.status === 400) {
+      const body = err.response?.data;
+      logger.warn(
+        { transcriptId, status: 400, body: JSON.stringify(body).slice(0, 500) },
+        'Full query rejected by Fireflies — retrying with minimal query',
+      );
+      usedMinimal = true;
+      response = await client.post('', {
+        query: TRANSCRIPT_QUERY_MINIMAL,
+        variables: { transcriptId },
+      });
+    } else {
+      throw err;
+    }
+  }
 
   if (response.data.errors && response.data.errors.length > 0) {
     const errorMsg = response.data.errors.map((e) => e.message).join('; ');
+    // Log the full error body for easier debugging
+    logger.error(
+      { transcriptId, graphqlErrors: response.data.errors },
+      'Fireflies GraphQL error response',
+    );
     throw new Error(`Fireflies GraphQL error: ${errorMsg}`);
   }
 
@@ -82,7 +127,11 @@ async function fetchTranscript(transcriptId, apiKey) {
     throw new Error(`Transcript not found in Fireflies API for id: ${transcriptId}`);
   }
 
-  logger.info({ transcriptId, title: transcript.title }, 'Fireflies transcript fetched');
+  if (usedMinimal) {
+    logger.info({ transcriptId, title: transcript.title }, 'Fireflies transcript fetched (minimal query)');
+  } else {
+    logger.info({ transcriptId, title: transcript.title }, 'Fireflies transcript fetched');
+  }
 
   return normalizeTranscript(transcript);
 }
