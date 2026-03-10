@@ -7,14 +7,14 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-    POSTGRES_DB:       hurma_recorder
-    POSTGRES_USER:     hurma_recorder
-    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB:       hurma_recorder
+      POSTGRES_USER:     hurma_recorder
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U hurma_recorder"]
       interval: 10s
       timeout: 5s
       retries: 5
