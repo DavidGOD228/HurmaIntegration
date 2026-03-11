@@ -136,32 +136,125 @@ async function getAbsences({ from, to, page = 1, perPage = 100, employeeId } = {
       perPage,
     };
   } catch (err) {
-    // v1 may not expose /absences; 404 is non-fatal for sync
+    // v1 may not expose /absences; rethrow so getAllAbsences can fall back to /out-off-office
     if (err.response?.status === 404) {
-      logger.warn({ from, to }, 'Hurma /absences not found (v1 may use per-employee endpoints)');
-      return { absences: [], total: 0, page, perPage };
+      logger.warn({ from, to }, 'Hurma /absences not found (v1 uses /out-off-office)');
     }
-    logger.error({ err, from, to }, 'Hurma getAbsences failed');
     throw err;
   }
 }
 
 /**
  * Fetch all absences in date range by paging through.
+ * Tries GET /api/{v}/absences first. For Hurma v1 (no /absences), falls back to
+ * GET /out-off-office which returns per-employee absence arrays (vacation, sick_leave, etc).
+ *
+ * @param {string} from  YYYY-MM-DD
+ * @param {string} to    YYYY-MM-DD
+ * @returns {Promise<any[]>} Array of { employee_id, absence_type, date_from, date_to, hours }
+ */
+async function getAllAbsences(from, to) {
+  try {
+    const all = [];
+    let page = 1;
+    while (true) {
+      const { absences, total, perPage } = await getAbsences({ from, to, page, perPage: 100 });
+      all.push(...absences);
+      if (all.length >= total || absences.length === 0) break;
+      page++;
+    }
+    return all;
+  } catch (err) {
+    if (err.response?.status === 404 && v === 'v1') {
+      logger.info('Hurma v1 /absences not found, using /out-off-office');
+      return getAbsencesFromOutOfOffice(from, to);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Hurma v1: fetch absences via GET /out-off-office.
+ * Response: { result: { data: [{ id, name, email, vacation: [...], sick_leave: [...], ... }] } }
+ * Each array contains date strings (YYYY-MM-DD or DD.MM.YYYY).
+ *
  * @param {string} from  YYYY-MM-DD
  * @param {string} to    YYYY-MM-DD
  * @returns {Promise<any[]>}
  */
-async function getAllAbsences(from, to) {
+async function getAbsencesFromOutOfOffice(from, to) {
+  const typeToAbsence = {
+    vacation: 'vacation',
+    sick_leave: 'sick_leave',
+    documented_sick_leave: 'sick_leave',
+    unpaid_vacation: 'unpaid_leave',
+    business_trip: 'other',
+    home_work: 'other',
+    overtime: 'other',
+    weekend_work: 'other',
+    night_shift: 'other',
+  };
   const all = [];
   let page = 1;
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+
   while (true) {
-    const { absences, total, perPage } = await getAbsences({ from, to, page, perPage: 100 });
-    all.push(...absences);
-    if (all.length >= total || absences.length === 0) break;
+    const { data } = await getClient().get(`/api/${v}/out-off-office`, {
+      params: { status: 9, page, per_page: 100 },
+    });
+    const result = data.result || data;
+    const items = result.data || data.data || [];
+    if (items.length === 0) break;
+
+    for (const emp of items) {
+      const hurmaEmployeeId = String(emp.id || '');
+      for (const [key, absenceType] of Object.entries(typeToAbsence)) {
+        const dates = emp[key];
+        if (!Array.isArray(dates)) continue;
+        for (const d of dates) {
+          let dateStr = d;
+          if (typeof d === 'object' && d != null && d.date) {
+            dateStr = d.date;
+          }
+          if (typeof dateStr !== 'string') continue;
+          // Normalize date: DD.MM.YYYY or YYYY-MM-DD
+          const parsed = parseHurmaDate(dateStr);
+          if (!parsed) continue;
+          const dObj = new Date(parsed);
+          if (dObj >= fromDate && dObj <= toDate) {
+            all.push({
+              employee_id: hurmaEmployeeId,
+              absence_type: absenceType,
+              date_from: parsed,
+              date_to: parsed,
+              hours: 8,
+            });
+          }
+        }
+      }
+    }
+
+    const total = result.total ?? data.total ?? items.length;
+    if (page * 100 >= total || items.length === 0) break;
     page++;
   }
   return all;
+}
+
+function parseHurmaDate(s) {
+  if (!s || typeof s !== 'string') return null;
+  const trimmed = s.trim();
+  // YYYY-MM-DD
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  // DD.MM.YYYY
+  const eu = /^(\d{1,2})\.(\d{1,2})\.(\d{4})/.exec(trimmed);
+  if (eu) {
+    const [, day, month, year] = eu;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  return null;
 }
 
 /**

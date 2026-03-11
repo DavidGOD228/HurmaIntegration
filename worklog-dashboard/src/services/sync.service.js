@@ -196,8 +196,10 @@ async function syncAbsences(from, to) {
     const rawAbsences = await hurma.getAllAbsences(from, to);
 
     for (const abs of rawAbsences) {
-      const hurmaAbsenceId = String(abs.id || '');
       const hurmaEmployeeId = String(abs.employee_id || abs.employee?.id || '');
+      const absenceType = normalizeAbsenceType(abs.type || abs.absence_type || abs.kind || 'other');
+      const dateFrom = abs.date_from || abs.start_date || abs.from;
+      const dateTo   = abs.date_to   || abs.end_date   || abs.to;
 
       const { rows: emp } = await db.query(
         'SELECT id FROM employees WHERE hurma_employee_id = $1',
@@ -209,11 +211,12 @@ async function syncAbsences(from, to) {
       }
       const employeeId = emp[0].id;
 
-      const absenceType = normalizeAbsenceType(abs.type || abs.absence_type || abs.kind || 'other');
-      const dateFrom    = abs.date_from || abs.start_date || abs.from;
-      const dateTo      = abs.date_to   || abs.end_date   || abs.to;
-      const hours       = abs.hours != null ? parseFloat(abs.hours) : null;
-      const isApproved  = abs.is_approved ?? abs.approved ?? true;
+      // Hurma /absences uses abs.id; /out-off-office uses synthetic id
+      const hurmaAbsenceId = abs.id != null
+        ? String(abs.id)
+        : `oo-${hurmaEmployeeId}-${absenceType}-${dateFrom}`;
+      const hours      = abs.hours != null ? parseFloat(abs.hours) : null;
+      const isApproved = abs.is_approved ?? abs.approved ?? true;
 
       await db.query(
         `INSERT INTO absences
