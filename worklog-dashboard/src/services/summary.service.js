@@ -130,8 +130,14 @@ async function getDailySummary(dateStr, filters = {}) {
       COALESCE(d.actual_hours, 0)::DECIMAL(6,2)        AS actual_hours,
       COALESCE(d.delta_hours, 0)::DECIMAL(6,2)         AS delta_hours,
       d.leave_type,
-      COALESCE(d.contradiction_count, 0)               AS contradiction_count,
-      COALESCE(d.status, 'EXCLUDED')                   AS status,
+      (SELECT COUNT(*)::int FROM contradictions c
+       WHERE c.employee_id = e.id AND c.contradiction_date = $1 AND c.is_resolved = false) AS contradiction_count,
+      CASE
+        WHEN (SELECT COUNT(*) FROM contradictions c
+              WHERE c.employee_id = e.id AND c.contradiction_date = $1 AND c.is_resolved = false) > 0
+        THEN 'CONTRADICTION'
+        ELSE COALESCE(d.status, 'EXCLUDED')
+      END AS status,
       d.updated_at                                     AS last_synced
     FROM employees e
     JOIN employee_monitoring_settings s ON s.employee_id = e.id
@@ -141,10 +147,13 @@ async function getDailySummary(dateStr, filters = {}) {
   const params = [dateStr];
 
   if (filters.onlyProblematic) {
-    sql += ` AND COALESCE(d.status, 'EXCLUDED') NOT IN ('OK','ON_LEAVE','EXCLUDED')`;
+    sql += ` AND (
+      (SELECT COUNT(*) FROM contradictions c WHERE c.employee_id = e.id AND c.contradiction_date = $1 AND c.is_resolved = false) > 0
+      OR COALESCE(d.status, 'EXCLUDED') NOT IN ('OK','ON_LEAVE','EXCLUDED')
+    )`;
   }
   if (filters.onlyContradictions) {
-    sql += ` AND COALESCE(d.contradiction_count, 0) > 0`;
+    sql += ` AND (SELECT COUNT(*) FROM contradictions c WHERE c.employee_id = e.id AND c.contradiction_date = $1 AND c.is_resolved = false) > 0`;
   }
 
   sql += ' ORDER BY e.full_name';
@@ -174,8 +183,14 @@ async function getMonthlySummary(yearMonth, filters = {}) {
       COALESCE(SUM(d.actual_hours), 0)::DECIMAL(8,2)    AS actual_hours,
       (COALESCE(SUM(d.actual_hours),0) - COALESCE(SUM(d.expected_hours),0))::DECIMAL(8,2)
                                                         AS delta_hours,
-      COALESCE(SUM(d.contradiction_count), 0)           AS contradiction_count,
-      MAX(d.status)                                     AS worst_status,
+      (SELECT COUNT(*)::int FROM contradictions c
+       WHERE c.employee_id = e.id AND c.contradiction_date >= $1 AND c.contradiction_date <= $2 AND c.is_resolved = false) AS contradiction_count,
+      CASE
+        WHEN (SELECT COUNT(*) FROM contradictions c
+              WHERE c.employee_id = e.id AND c.contradiction_date >= $1 AND c.contradiction_date <= $2 AND c.is_resolved = false) > 0
+        THEN 'CONTRADICTION'
+        ELSE MAX(d.status)
+      END AS worst_status,
       COUNT(*) FILTER (WHERE d.status = 'OK')           AS ok_days,
       COUNT(*) FILTER (WHERE d.status = 'UNDERLOGGED')  AS underlogged_days,
       COUNT(*) FILTER (WHERE d.status = 'OVERLOGGED')   AS overlogged_days,
@@ -190,8 +205,8 @@ async function getMonthlySummary(yearMonth, filters = {}) {
   const params = [from, to];
 
   if (filters.onlyProblematic) {
-    sql += ` HAVING SUM(d.contradiction_count) > 0 OR
-             SUM(d.actual_hours) < SUM(d.expected_hours) - $3`;
+    sql += ` HAVING (SELECT COUNT(*) FROM contradictions c WHERE c.employee_id = e.id AND c.contradiction_date >= $1 AND c.contradiction_date <= $2 AND c.is_resolved = false) > 0
+             OR SUM(d.actual_hours) < SUM(d.expected_hours) - $3`;
     params.push(config.OK_DELTA_THRESHOLD_HOURS * 5);
   }
 
