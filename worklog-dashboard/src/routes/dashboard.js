@@ -23,11 +23,13 @@ function getLeaveTypeDisplayLabel(type) {
 // GET /api/dashboard/daily?date=YYYY-MM-DD&onlyProblematic=1&onlyContradictions=1
 router.get('/daily', async (req, res, next) => {
   try {
-    const date = req.query.date || toDateString(new Date());
+    const date = toDateString(req.query.date) || req.query.date || toDateString(new Date());
     const filters = {
       onlyProblematic:    req.query.onlyProblematic === '1' || req.query.onlyProblematic === 'true',
       onlyContradictions: req.query.onlyContradictions === '1' || req.query.onlyContradictions === 'true',
     };
+    // Ensure summaries (and contradiction counts) exist for this date for all included employees
+    await summaryService.ensureSummariesForDate(date);
     const rows = await summaryService.getDailySummary(date, filters);
 
     // Totals

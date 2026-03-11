@@ -310,9 +310,25 @@ async function ensureSummariesForRange(employeeId, from, to) {
   logger.info({ employeeId, from, to, computed: missing.length }, 'ensureSummariesForRange');
 }
 
+/**
+ * Ensure all included employees have an up-to-date summary for the given date.
+ * Used by Daily overview so conflict counts and status are correct.
+ */
+async function ensureSummariesForDate(dateStr) {
+  const { rows: employees } = await db.query(
+    `SELECT e.id FROM employees e
+     JOIN employee_monitoring_settings s ON s.employee_id = e.id
+     WHERE s.monitoring_mode = 'included' AND e.is_active = true`
+  );
+  for (const { id } of employees) {
+    await ensureSummariesForRange(id, dateStr, dateStr);
+  }
+}
+
 module.exports = {
   computeDaySummary,
   getDailySummary,
   getMonthlySummary,
   getEmployeeDetails,
+  ensureSummariesForDate,
 };
