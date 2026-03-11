@@ -1,10 +1,24 @@
 const express = require('express');
 const { z }   = require('zod');
 const summaryService = require('../services/summary.service');
+const contradictionService = require('../services/contradiction.service');
 const db = require('../db');
+const logger = require('../utils/logger');
 const { toDateString } = require('../utils/workdays');
 
 const router = express.Router();
+
+/** Map canonical absence_type to display label for table and "Leave in period". */
+function getLeaveTypeDisplayLabel(type) {
+  if (!type) return '';
+  const t = String(type).toLowerCase();
+  if (t === 'sick_leave') return 'Sick Leave';
+  if (t === 'vacation') return 'Vacation';
+  if (t === 'unpaid_leave') return 'Unpaid Leave';
+  if (t === 'maternity') return 'Maternity Leave';
+  if (t === 'other') return 'Leave';
+  return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 // GET /api/dashboard/daily?date=YYYY-MM-DD&onlyProblematic=1&onlyContradictions=1
 router.get('/daily', async (req, res, next) => {
@@ -67,9 +81,9 @@ router.get('/employees/:id', async (req, res, next) => {
 
     const employee = empRows[0];
 
-    // Absences in range (fetch early so we can enrich days)
+    // Absences in range (fetch early so we can enrich days; include id for contradiction upsert)
     const { rows: absencesRaw } = await db.query(
-      `SELECT absence_type, date_from, date_to, hours, is_approved
+      `SELECT id, absence_type, date_from, date_to, hours, is_approved
        FROM absences
        WHERE employee_id = $1 AND date_from <= $2 AND date_to >= $3
        ORDER BY date_from ASC`,
@@ -79,6 +93,7 @@ router.get('/employees/:id', async (req, res, next) => {
       ...a,
       date_from: toDateString(a.date_from) || a.date_from,
       date_to:   toDateString(a.date_to)   || a.date_to,
+      absence_type_display: getLeaveTypeDisplayLabel(a.absence_type),
     }));
 
     let days = await summaryService.getEmployeeDetails(employeeId, from, to);
@@ -89,7 +104,8 @@ router.get('/employees/:id', async (req, res, next) => {
       summary_date: toDateString(d.summary_date) || d.summary_date,
     }));
 
-    // Enrich days with leave from absences so table always shows leave type and correct expected/delta/status
+    // Enrich days with leave from absences; persist contradictions so they appear on Conflicts page
+    const conflictsToUpsert = [];
     days = days.map((d) => {
       const dateStr = d.summary_date;
       const matchingAbsence = absences.find(
@@ -106,15 +122,37 @@ router.get('/employees/:id', async (req, res, next) => {
         ? (actualHours > 0 ? 'CONTRADICTION' : 'ON_LEAVE')
         : (Math.abs(deltaHours) <= 0.5 ? 'OK' : deltaHours < -0.5 ? 'UNDERLOGGED' : 'OVERLOGGED');
       const contradictionCount = isFullDayLeave && actualHours > 0 ? 1 : (parseInt(d.contradiction_count, 10) || 0);
+      if (isFullDayLeave && actualHours > 0) {
+        conflictsToUpsert.push({ dateStr, matchingAbsence, actualHours });
+      }
       return {
         ...d,
         leave_type: matchingAbsence.absence_type,
+        leave_type_display: getLeaveTypeDisplayLabel(matchingAbsence.absence_type),
         expected_hours: expectedHours,
         delta_hours: deltaHours,
         status,
         contradiction_count: contradictionCount,
       };
     });
+
+    // Persist "logged on leave day" contradictions so the Conflicts page shows them
+    for (const { dateStr, matchingAbsence, actualHours } of conflictsToUpsert) {
+      try {
+        await contradictionService.upsertLoggedOnLeaveContradiction({
+          employeeId:   employeeId,
+          fullName:     employee.full_name || 'Employee',
+          dateStr,
+          absenceType:  matchingAbsence.absence_type,
+          actualHours,
+          absenceId:    matchingAbsence.id || null,
+          timeEntryId:  null,
+        });
+      } catch (err) {
+        // Log but don't fail the request
+        logger.warn({ err, employeeId, dateStr }, 'Failed to upsert contradiction');
+      }
+    }
 
     // Summary totals from enriched days
     const totalExpected = days.reduce((s, r) => s + parseFloat(r.expected_hours), 0);

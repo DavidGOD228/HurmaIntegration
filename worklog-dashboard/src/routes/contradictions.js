@@ -22,7 +22,11 @@ router.get('/', async (req, res, next) => {
       severity:   severity   || undefined,
       resolved:   resolved === 'true',
     });
-    res.json({ total: rows.length, contradictions: rows });
+    const contradictions = rows.map((c) => ({
+      ...c,
+      contradiction_date: toDateString(c.contradiction_date) || c.contradiction_date,
+    }));
+    res.json({ total: contradictions.length, contradictions });
   } catch (err) { next(err); }
 });
 

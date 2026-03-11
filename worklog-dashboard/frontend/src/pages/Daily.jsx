@@ -6,6 +6,17 @@ import SortableTable from '../components/SortableTable';
 
 function fmt(n) { return (parseFloat(n) || 0).toFixed(1); }
 
+function leaveTypeLabel(type) {
+  if (!type) return '—';
+  const t = String(type).toLowerCase();
+  if (t === 'sick_leave') return 'Sick Leave';
+  if (t === 'vacation') return 'Vacation';
+  if (t === 'unpaid_leave') return 'Unpaid Leave';
+  if (t === 'maternity') return 'Maternity Leave';
+  if (t === 'other') return 'Leave';
+  return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function DeltaCell({ delta }) {
   const d = parseFloat(delta) || 0;
   const color = d < -0.5 ? 'text-yellow-700 font-semibold'
@@ -61,7 +72,7 @@ export default function Daily() {
     { key: 'expected_hours',      label: 'Expected',       render: (r) => `${fmt(r.expected_hours)}h` },
     { key: 'actual_hours',        label: 'Logged',         render: (r) => `${fmt(r.actual_hours)}h` },
     { key: 'delta_hours',         label: 'Delta',          render: (r) => <DeltaCell delta={r.delta_hours} /> },
-    { key: 'leave_type',          label: 'Leave',          render: (r) => r.leave_type ? <span className="capitalize text-blue-700 text-xs">{r.leave_type.replace('_',' ')}</span> : '—' },
+    { key: 'leave_type',          label: 'Leave',          render: (r) => r.leave_type ? <span className="text-blue-700 text-xs">{leaveTypeLabel(r.leave_type)}</span> : '—' },
     { key: 'contradiction_count', label: 'Issues',         render: (r) => r.contradiction_count > 0 ? <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold">{r.contradiction_count}</span> : '—' },
     { key: 'status',              label: 'Status',         render: (r) => <StatusBadge status={r.status} /> },
   ];

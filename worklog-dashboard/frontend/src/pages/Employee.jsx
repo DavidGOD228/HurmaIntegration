@@ -128,7 +128,7 @@ export default function Employee() {
           <div className="space-y-1">
             {absences.map((a, i) => (
               <p key={i} className="text-sm text-blue-700">
-                <span className="capitalize font-medium">{a.absence_type.replace(/_/g,' ')}</span>
+                <span className="font-medium">{a.absence_type_display || a.absence_type?.replace(/_/g,' ') || '—'}</span>
                 {' '}— {a.date_from} to {a.date_to}
                 {a.hours ? ` (${a.hours}h)` : ''}
                 {!a.is_approved && ' — ⚠ not approved'}
@@ -160,7 +160,7 @@ export default function Employee() {
                 <td className="px-4 py-2">{fmt(d.expected_hours)}h</td>
                 <td className="px-4 py-2">{fmt(d.actual_hours)}h</td>
                 <td className="px-4 py-2"><DeltaCell delta={d.delta_hours} /></td>
-                <td className="px-4 py-2 text-xs text-blue-700 capitalize">{d.leave_type?.replace(/_/g,' ') || '—'}</td>
+                <td className="px-4 py-2 text-xs text-blue-700">{d.leave_type_display || d.leave_type?.replace(/_/g,' ') || '—'}</td>
                 <td className="px-4 py-2">
                   {d.contradiction_count > 0
                     ? <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-xs font-bold">{d.contradiction_count}</span>
