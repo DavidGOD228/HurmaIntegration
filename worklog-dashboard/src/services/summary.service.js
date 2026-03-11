@@ -131,29 +131,29 @@ async function getDailySummary(dateStr, filters = {}) {
       COALESCE(d.delta_hours, 0)::DECIMAL(6,2)         AS delta_hours,
       d.leave_type,
       (SELECT COUNT(*)::int FROM contradictions c
-       WHERE c.employee_id = e.id AND c.contradiction_date = $1 AND c.is_resolved = false) AS contradiction_count,
+       WHERE c.employee_id = e.id AND c.contradiction_date = ($1)::date AND c.is_resolved = false) AS contradiction_count,
       CASE
         WHEN (SELECT COUNT(*) FROM contradictions c
-              WHERE c.employee_id = e.id AND c.contradiction_date = $1 AND c.is_resolved = false) > 0
+              WHERE c.employee_id = e.id AND c.contradiction_date = ($1)::date AND c.is_resolved = false) > 0
         THEN 'CONTRADICTION'
         ELSE COALESCE(d.status, 'EXCLUDED')
       END AS status,
       d.updated_at                                     AS last_synced
     FROM employees e
     JOIN employee_monitoring_settings s ON s.employee_id = e.id
-    LEFT JOIN daily_employee_summary d ON d.employee_id = e.id AND d.summary_date = $1
+    LEFT JOIN daily_employee_summary d ON d.employee_id = e.id AND d.summary_date = ($1)::date
     WHERE s.monitoring_mode = 'included' AND e.is_active = true
   `;
   const params = [dateStr];
 
   if (filters.onlyProblematic) {
     sql += ` AND (
-      (SELECT COUNT(*) FROM contradictions c WHERE c.employee_id = e.id AND c.contradiction_date = $1 AND c.is_resolved = false) > 0
+      (SELECT COUNT(*) FROM contradictions c WHERE c.employee_id = e.id AND c.contradiction_date = ($1)::date AND c.is_resolved = false) > 0
       OR COALESCE(d.status, 'EXCLUDED') NOT IN ('OK','ON_LEAVE','EXCLUDED')
     )`;
   }
   if (filters.onlyContradictions) {
-    sql += ` AND (SELECT COUNT(*) FROM contradictions c WHERE c.employee_id = e.id AND c.contradiction_date = $1 AND c.is_resolved = false) > 0`;
+    sql += ` AND (SELECT COUNT(*) FROM contradictions c WHERE c.employee_id = e.id AND c.contradiction_date = ($1)::date AND c.is_resolved = false) > 0`;
   }
 
   sql += ' ORDER BY e.full_name';
@@ -184,10 +184,10 @@ async function getMonthlySummary(yearMonth, filters = {}) {
       (COALESCE(SUM(d.actual_hours),0) - COALESCE(SUM(d.expected_hours),0))::DECIMAL(8,2)
                                                         AS delta_hours,
       (SELECT COUNT(*)::int FROM contradictions c
-       WHERE c.employee_id = e.id AND c.contradiction_date >= $1 AND c.contradiction_date <= $2 AND c.is_resolved = false) AS contradiction_count,
+       WHERE c.employee_id = e.id AND c.contradiction_date >= ($1)::date AND c.contradiction_date <= ($2)::date AND c.is_resolved = false) AS contradiction_count,
       CASE
         WHEN (SELECT COUNT(*) FROM contradictions c
-              WHERE c.employee_id = e.id AND c.contradiction_date >= $1 AND c.contradiction_date <= $2 AND c.is_resolved = false) > 0
+              WHERE c.employee_id = e.id AND c.contradiction_date >= ($1)::date AND c.contradiction_date <= ($2)::date AND c.is_resolved = false) > 0
         THEN 'CONTRADICTION'
         ELSE MAX(d.status)
       END AS worst_status,
@@ -205,7 +205,7 @@ async function getMonthlySummary(yearMonth, filters = {}) {
   const params = [from, to];
 
   if (filters.onlyProblematic) {
-    sql += ` HAVING (SELECT COUNT(*) FROM contradictions c WHERE c.employee_id = e.id AND c.contradiction_date >= $1 AND c.contradiction_date <= $2 AND c.is_resolved = false) > 0
+    sql += ` HAVING (SELECT COUNT(*) FROM contradictions c WHERE c.employee_id = e.id AND c.contradiction_date >= ($1)::date AND c.contradiction_date <= ($2)::date AND c.is_resolved = false) > 0
              OR SUM(d.actual_hours) < SUM(d.expected_hours) - $3`;
     params.push(config.OK_DELTA_THRESHOLD_HOURS * 5);
   }

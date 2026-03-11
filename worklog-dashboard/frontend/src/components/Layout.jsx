@@ -6,7 +6,8 @@ const nav = [
   { to: '/',           label: 'Daily',    icon: '📅' },
   { to: '/monthly',    label: 'Monthly',  icon: '📆' },
   { to: '/settings',   label: 'Settings', icon: '⚙️' },
-  { to: '/contradictions', label: 'Issues', icon: '⚠️' },
+  // Conflicts & Issues page (commented out for now)
+  // { to: '/contradictions', label: 'Issues', icon: '⚠️' },
 ];
 
 export default function Layout({ children }) {

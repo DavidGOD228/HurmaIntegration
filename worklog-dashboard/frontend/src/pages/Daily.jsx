@@ -108,14 +108,13 @@ export default function Daily() {
 
       {/* Stat cards */}
       {data && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
           <StatCard label="Monitored"     value={data.totals.monitored} />
           <StatCard label="OK"            value={data.totals.ok}            color="bg-green-50" />
           <StatCard label="On Leave"      value={data.totals.onLeave}        color="bg-blue-50" />
           <StatCard label="Underlogged"   value={data.totals.underlogged}    color="bg-yellow-50" />
           <StatCard label="Overlogged"    value={data.totals.overlogged}     color="bg-orange-50" />
           <StatCard label="Conflicts"     value={Number(data.totals.contradictions) || 0} color="bg-red-50" />
-          <StatCard label="Unmapped"      value={data.totals.unmapped}       color="bg-purple-50" />
         </div>
       )}
 
