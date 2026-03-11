@@ -1,6 +1,6 @@
 {
   "name": "worklog-dashboard",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Internal worklog and attendance dashboard — Hurma vs Redmine comparison",
   "main": "src/server.js",
   "engines": { "node": ">=20.0.0" },
@@ -8,7 +8,9 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "migrate": "node src/db/migrate.js",
-    "build:frontend": "cd frontend && npm ci && npm run build"
+    "build:frontend": "cd frontend && npm ci && npm run build",
+    "version:patch": "npm version patch --no-git-tag-version",
+    "version:minor": "npm version minor --no-git-tag-version"
   },
   "dependencies": {
     "axios": "^1.7.9",

@@ -186,6 +186,7 @@ async function syncEmployees() {
 
 /**
  * Sync absences from Hurma for the given date range into `absences` table.
+ * Deletes existing absences in range first so removals in Hurma are reflected.
  * @param {string} from  YYYY-MM-DD
  * @param {string} to    YYYY-MM-DD
  */
@@ -194,6 +195,13 @@ async function syncAbsences(from, to) {
   let processed = 0;
   try {
     const rawAbsences = await hurma.getAllAbsences(from, to);
+
+    // Delete absences in range so removals in Hurma are reflected
+    const { rowCount: deleted } = await db.query(
+      `DELETE FROM absences WHERE date_from <= $1 AND date_to >= $2`,
+      [to, from]
+    );
+    if (deleted > 0) logger.info({ from, to, deleted }, 'Cleared old absences in range');
 
     for (const abs of rawAbsences) {
       const hurmaEmployeeId = String(abs.employee_id || abs.employee?.id || '');
