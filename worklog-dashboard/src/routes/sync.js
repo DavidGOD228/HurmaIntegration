@@ -1,6 +1,7 @@
 const express = require('express');
 const { z }   = require('zod');
 const syncService = require('../services/sync.service');
+const hurma       = require('../clients/hurma');
 const db          = require('../db');
 const { toDateString } = require('../utils/workdays');
 
@@ -100,6 +101,16 @@ router.get('/absences-debug', async (req, res, next) => {
       [to, from]
     );
     res.json({ from, to, count: parseInt(countRows[0].cnt, 10), sample });
+  } catch (err) { next(err); }
+});
+
+// GET /api/sync/hurma-absences-debug — fetch raw from Hurma API to see response structure
+router.get('/hurma-absences-debug', async (req, res, next) => {
+  try {
+    const from = req.query.from || toDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+    const to   = req.query.to   || toDateString(new Date());
+    const raw  = await hurma.debugAbsencesFetch(from, to);
+    res.json(raw);
   } catch (err) { next(err); }
 });
 

@@ -202,8 +202,13 @@ async function getAbsencesFromEmployeeEndpoints(from, to) {
       try {
         let page = 1;
         while (true) {
+          const params = { page, per_page: 100 };
+          if (from && to) {
+            params.date_from = from;
+            params.date_to = to;
+          }
           const { data } = await getClient().get(`/api/${v}/employees/${encodeURIComponent(hurmaId)}/${path}`, {
-            params: { page, per_page: 100 },
+            params,
           });
           const result = data.result || data;
           const items = result.data || data.data || [];
@@ -270,11 +275,15 @@ async function getAbsencesFromOutOfOffice(from, to) {
 
   while (true) {
     try {
-      const { data } = await getClient().get(`/api/${v}/out-off-office`, {
-        params: { status: 9, page, per_page: 100 },
-      });
+      const params = { status: 9, page, per_page: 100 };
+      if (from && to) {
+        params.date_from = from;
+        params.date_to = to;
+      }
+      const { data } = await getClient().get(`/api/${v}/out-off-office`, { params });
       const result = data.result || data;
-      const items = result.data || data.data || [];
+      let items = result.data || data.data || [];
+      if (!Array.isArray(items)) items = Array.isArray(result) ? result : [];
       if (items.length === 0) break;
 
       for (const emp of items) {
@@ -342,6 +351,42 @@ async function validateToken() {
   }
 }
 
+/**
+ * Debug: fetch raw response from Hurma absence endpoints.
+ * Returns { employeesSample, vacationsRaw, outOfOfficeRaw, errors } for debugging.
+ */
+async function debugAbsencesFetch(from, to) {
+  const out = { employeesSample: [], vacationsRaw: null, outOfOfficeRaw: null, errors: [] };
+  try {
+    const { employees } = await getEmployees({ page: 1, perPage: 3 });
+    out.employeesSample = employees.map((e) => ({ id: e.id, name: e.full_name || e.name, email: e.email }));
+
+    if (employees.length > 0) {
+      const firstId = employees[0].id ?? employees[0].employee_id;
+      try {
+        const { data } = await getClient().get(`/api/${v}/employees/${encodeURIComponent(firstId)}/vacations`, {
+          params: { page: 1, per_page: 10 },
+        });
+        out.vacationsRaw = data;
+      } catch (e) {
+        out.errors.push(`vacations: ${e.message}`);
+      }
+    }
+
+    try {
+      const { data } = await getClient().get(`/api/${v}/out-off-office`, {
+        params: { status: 9, page: 1, per_page: 5 },
+      });
+      out.outOfOfficeRaw = data;
+    } catch (e) {
+      out.errors.push(`out-off-office: ${e.message}`);
+    }
+  } catch (e) {
+    out.errors.push(`overall: ${e.message}`);
+  }
+  return out;
+}
+
 module.exports = {
   getEmployees,
   getAllEmployees,
@@ -349,4 +394,5 @@ module.exports = {
   getAbsences,
   getAllAbsences,
   validateToken,
+  debugAbsencesFetch,
 };

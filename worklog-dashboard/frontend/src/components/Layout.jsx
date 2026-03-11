@@ -70,18 +70,20 @@ export default function Layout({ children }) {
           ))}
         </nav>
         <div className="px-4 py-4 border-t border-slate-700">
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:text-blue-300 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            {syncing ? 'Syncing…' : '↻ Sync Now'}
-          </button>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:text-blue-300 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              {syncing ? 'Syncing…' : '↻ Sync Now'}
+            </button>
+            {version && (
+              <span className="text-xs text-slate-500 shrink-0">v{version}</span>
+            )}
+          </div>
           {syncMsg && (
             <p className="mt-2 text-xs text-slate-400 text-center">{syncMsg}</p>
-          )}
-          {version && (
-            <p className="mt-2 text-xs text-slate-500 text-center">v{version}</p>
           )}
         </div>
       </aside>
