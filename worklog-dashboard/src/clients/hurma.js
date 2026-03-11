@@ -146,37 +146,106 @@ async function getAbsences({ from, to, page = 1, perPage = 100, employeeId } = {
 
 /**
  * Fetch all absences in date range by paging through.
- * Tries GET /api/{v}/absences first. For Hurma v1 (no /absences), falls back to
- * GET /out-off-office which returns per-employee absence arrays (vacation, sick_leave, etc).
+ * For v1: tries per-employee endpoints first (most reliable), then /out-off-office.
+ * For v3: uses GET /api/{v}/absences.
  *
  * @param {string} from  YYYY-MM-DD
  * @param {string} to    YYYY-MM-DD
- * @returns {Promise<any[]>} Array of { employee_id, absence_type, date_from, date_to, hours }
+ * @returns {Promise<any[]>} Array of { employee_id, absence_type, date_from, date_to, hours, id? }
  */
 async function getAllAbsences(from, to) {
-  try {
-    const all = [];
-    let page = 1;
-    while (true) {
-      const { absences, total, perPage } = await getAbsences({ from, to, page, perPage: 100 });
-      all.push(...absences);
-      if (all.length >= total || absences.length === 0) break;
-      page++;
-    }
-    return all;
-  } catch (err) {
-    if (err.response?.status === 404 && v === 'v1') {
-      logger.info('Hurma v1 /absences not found, using /out-off-office');
-      return getAbsencesFromOutOfOffice(from, to);
-    }
-    throw err;
+  if (v === 'v1') {
+    const fromPerEmployee = await getAbsencesFromEmployeeEndpoints(from, to);
+    if (fromPerEmployee.length > 0) return fromPerEmployee;
+    return getAbsencesFromOutOfOffice(from, to);
   }
+  const all = [];
+  let page = 1;
+  while (true) {
+    const { absences, total, perPage } = await getAbsences({ from, to, page, perPage: 100 });
+    all.push(...absences);
+    if (all.length >= total || absences.length === 0) break;
+    page++;
+  }
+  return all;
+}
+
+/** Per-employee absence endpoints: path suffix -> our absence_type */
+const EMPLOYEE_ABSENCE_ENDPOINTS = [
+  { path: 'vacations', type: 'vacation' },
+  { path: 'sick-leave', type: 'sick_leave' },
+  { path: 'sick-leave-documented', type: 'sick_leave' },
+  { path: 'unpaid-vacations', type: 'unpaid_leave' },
+  { path: 'business-trip', type: 'other' },
+  { path: 'not-in-office', type: 'other' },
+];
+
+/**
+ * Hurma v1: fetch absences via per-employee endpoints.
+ * GET /employees/{id}/vacations etc. return { result: { data: [{ day, event_id, type_description }] } }
+ *
+ * @param {string} from  YYYY-MM-DD
+ * @param {string} to    YYYY-MM-DD
+ * @returns {Promise<any[]>}
+ */
+async function getAbsencesFromEmployeeEndpoints(from, to) {
+  const employees = await getAllEmployees();
+  const all = [];
+  const fromDate = new Date(from + 'T00:00:00Z');
+  const toDate = new Date(to + 'T23:59:59Z');
+
+  for (const emp of employees) {
+    const hurmaId = String(emp.id || emp.employee_id || '');
+    if (!hurmaId) continue;
+
+    for (const { path, type: absenceType } of EMPLOYEE_ABSENCE_ENDPOINTS) {
+      try {
+        let page = 1;
+        while (true) {
+          const { data } = await getClient().get(`/api/${v}/employees/${encodeURIComponent(hurmaId)}/${path}`, {
+            params: { page, per_page: 100 },
+          });
+          const result = data.result || data;
+          const items = result.data || data.data || [];
+          if (!Array.isArray(items) || items.length === 0) break;
+
+          for (const item of items) {
+            const day = item.day || item.date;
+            const dateFrom = item.date_from || item.start_date || item.from;
+            const dateTo = item.date_to || item.end_date || item.to;
+            let startStr = day ? (parseHurmaDate(String(day)) || day) : (dateFrom ? parseHurmaDate(String(dateFrom)) || dateFrom : null);
+            let endStr = day ? startStr : (dateTo ? parseHurmaDate(String(dateTo)) || dateTo : startStr);
+            if (!startStr || !endStr) continue;
+            if (startStr > endStr) [startStr, endStr] = [endStr, startStr];
+            const start = new Date(startStr + 'T12:00:00Z');
+            const end = new Date(endStr + 'T12:00:00Z');
+            if (end < fromDate || start > toDate) continue;
+            all.push({
+              id: item.event_id || item.id,
+              employee_id: hurmaId,
+              absence_type: absenceType,
+              date_from: startStr,
+              date_to: endStr,
+              hours: 8,
+            });
+          }
+
+          const total = result.total ?? result.last_page ?? items.length;
+          if (page * 100 >= total) break;
+          page++;
+        }
+      } catch (e) {
+        if (e.response?.status !== 404) logger.warn({ err: e, hurmaId, path }, 'Employee absence fetch failed');
+      }
+    }
+  }
+  logger.info({ from, to, count: all.length }, 'getAbsencesFromEmployeeEndpoints');
+  return all;
 }
 
 /**
- * Hurma v1: fetch absences via GET /out-off-office.
+ * Hurma v1 fallback: fetch absences via GET /out-off-office.
  * Response: { result: { data: [{ id, name, email, vacation: [...], sick_leave: [...], ... }] } }
- * Each array contains date strings (YYYY-MM-DD or DD.MM.YYYY).
  *
  * @param {string} from  YYYY-MM-DD
  * @param {string} to    YYYY-MM-DD
@@ -196,49 +265,52 @@ async function getAbsencesFromOutOfOffice(from, to) {
   };
   const all = [];
   let page = 1;
-  const fromDate = new Date(from);
-  const toDate = new Date(to);
+  const fromDate = new Date(from + 'T00:00:00Z');
+  const toDate = new Date(to + 'T23:59:59Z');
 
   while (true) {
-    const { data } = await getClient().get(`/api/${v}/out-off-office`, {
-      params: { status: 9, page, per_page: 100 },
-    });
-    const result = data.result || data;
-    const items = result.data || data.data || [];
-    if (items.length === 0) break;
+    try {
+      const { data } = await getClient().get(`/api/${v}/out-off-office`, {
+        params: { status: 9, page, per_page: 100 },
+      });
+      const result = data.result || data;
+      const items = result.data || data.data || [];
+      if (items.length === 0) break;
 
-    for (const emp of items) {
-      const hurmaEmployeeId = String(emp.id || '');
-      for (const [key, absenceType] of Object.entries(typeToAbsence)) {
-        const dates = emp[key];
-        if (!Array.isArray(dates)) continue;
-        for (const d of dates) {
-          let dateStr = d;
-          if (typeof d === 'object' && d != null && d.date) {
-            dateStr = d.date;
-          }
-          if (typeof dateStr !== 'string') continue;
-          // Normalize date: DD.MM.YYYY or YYYY-MM-DD
-          const parsed = parseHurmaDate(dateStr);
-          if (!parsed) continue;
-          const dObj = new Date(parsed);
-          if (dObj >= fromDate && dObj <= toDate) {
-            all.push({
-              employee_id: hurmaEmployeeId,
-              absence_type: absenceType,
-              date_from: parsed,
-              date_to: parsed,
-              hours: 8,
-            });
+      for (const emp of items) {
+        const hurmaEmployeeId = String(emp.id || '');
+        for (const [key, absenceType] of Object.entries(typeToAbsence)) {
+          const dates = emp[key];
+          if (!Array.isArray(dates)) continue;
+          for (const d of dates) {
+            let dateStr = d;
+            if (typeof d === 'object' && d != null && d.date) dateStr = d.date;
+            if (typeof dateStr !== 'string') continue;
+            const parsed = parseHurmaDate(dateStr);
+            if (!parsed) continue;
+            const dObj = new Date(parsed + 'T12:00:00Z');
+            if (dObj >= fromDate && dObj <= toDate) {
+              all.push({
+                employee_id: hurmaEmployeeId,
+                absence_type: absenceType,
+                date_from: parsed,
+                date_to: parsed,
+                hours: 8,
+              });
+            }
           }
         }
       }
-    }
 
-    const total = result.total ?? data.total ?? items.length;
-    if (page * 100 >= total || items.length === 0) break;
-    page++;
+      const total = result.total ?? data.total ?? items.length;
+      if (page * 100 >= total || items.length === 0) break;
+      page++;
+    } catch (e) {
+      logger.warn({ err: e }, '/out-off-office failed');
+      break;
+    }
   }
+  logger.info({ from, to, count: all.length }, 'getAbsencesFromOutOfOffice');
   return all;
 }
 

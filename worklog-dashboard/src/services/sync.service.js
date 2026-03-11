@@ -354,6 +354,7 @@ async function recomputeSummaries(from, to) {
          AND s.monitoring_mode IN ('included', 'excluded', 'ignored_fulltime_external_project')`
     );
 
+    const dayPromises = [];
     for (const emp of employees) {
       // Absences for this employee in range
       const { rows: absences } = await db.query(
@@ -362,12 +363,12 @@ async function recomputeSummaries(from, to) {
         [emp.id, to, from]
       );
 
-      eachDay(from, to, async (dateStr) => {
-        await summaryService.computeDaySummary(emp, dateStr, absences, holidaySet);
+      eachDay(from, to, (dateStr) => {
+        dayPromises.push(summaryService.computeDaySummary(emp, dateStr, absences, holidaySet));
       });
-
       processed++;
     }
+    await Promise.all(dayPromises);
 
     // Run contradiction detection
     await contradictionService.detectContradictions(from, to);
