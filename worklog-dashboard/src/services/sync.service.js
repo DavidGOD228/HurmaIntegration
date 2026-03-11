@@ -196,12 +196,14 @@ async function syncAbsences(from, to) {
   try {
     const rawAbsences = await hurma.getAllAbsences(from, to);
 
-    // Delete absences in range so removals in Hurma are reflected
-    const { rowCount: deleted } = await db.query(
-      `DELETE FROM absences WHERE date_from <= $1 AND date_to >= $2`,
-      [to, from]
-    );
-    if (deleted > 0) logger.info({ from, to, deleted }, 'Cleared old absences in range');
+    // Only delete when we got data from Hurma — avoids wiping leaves if API fails
+    if (rawAbsences.length > 0) {
+      const { rowCount: deleted } = await db.query(
+        `DELETE FROM absences WHERE date_from <= $1 AND date_to >= $2`,
+        [to, from]
+      );
+      if (deleted > 0) logger.info({ from, to, deleted }, 'Cleared old absences in range');
+    }
 
     for (const abs of rawAbsences) {
       const hurmaEmployeeId = String(abs.employee_id || abs.employee?.id || '');

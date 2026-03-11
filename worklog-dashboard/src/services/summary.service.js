@@ -235,14 +235,19 @@ async function getEmployeeDetails(employeeId, from, to, computeMissing = true) {
  */
 async function ensureSummariesForRange(employeeId, from, to) {
   const { rows: existing } = await db.query(
-    `SELECT summary_date FROM daily_employee_summary
+    `SELECT summary_date, status, contradiction_count FROM daily_employee_summary
      WHERE employee_id = $1 AND summary_date >= $2 AND summary_date <= $3`,
     [employeeId, from, to]
   );
   const existingSet = new Set(existing.map((r) => r.summary_date));
+  const inconsistent = new Set(
+    existing
+      .filter((r) => r.status === 'CONTRADICTION' && parseInt(r.contradiction_count, 10) === 0)
+      .map((r) => r.summary_date)
+  );
   const missing = [];
   eachDay(from, to, (dateStr) => {
-    if (!existingSet.has(dateStr)) missing.push(dateStr);
+    if (!existingSet.has(dateStr) || inconsistent.has(dateStr)) missing.push(dateStr);
   });
   if (missing.length === 0) return;
 

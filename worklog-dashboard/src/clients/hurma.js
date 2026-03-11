@@ -155,9 +155,20 @@ async function getAbsences({ from, to, page = 1, perPage = 100, employeeId } = {
  */
 async function getAllAbsences(from, to) {
   if (v === 'v1') {
-    const fromPerEmployee = await getAbsencesFromEmployeeEndpoints(from, to);
-    if (fromPerEmployee.length > 0) return fromPerEmployee;
-    return getAbsencesFromOutOfOffice(from, to);
+    const [fromPerEmployee, fromOutOfOffice] = await Promise.all([
+      getAbsencesFromEmployeeEndpoints(from, to),
+      getAbsencesFromOutOfOffice(from, to),
+    ]);
+    // Merge both sources; per-employee takes precedence by id, out-of-office fills gaps
+    const byKey = new Map();
+    for (const a of fromPerEmployee) {
+      byKey.set(`${a.employee_id}-${a.date_from}-${a.absence_type}`, a);
+    }
+    for (const a of fromOutOfOffice) {
+      const k = `${a.employee_id}-${a.date_from}-${a.absence_type}`;
+      if (!byKey.has(k)) byKey.set(k, a);
+    }
+    return Array.from(byKey.values());
   }
   const all = [];
   let page = 1;
@@ -202,13 +213,8 @@ async function getAbsencesFromEmployeeEndpoints(from, to) {
       try {
         let page = 1;
         while (true) {
-          const params = { page, per_page: 100 };
-          if (from && to) {
-            params.date_from = from;
-            params.date_to = to;
-          }
           const { data } = await getClient().get(`/api/${v}/employees/${encodeURIComponent(hurmaId)}/${path}`, {
-            params,
+            params: { page, per_page: 100 },
           });
           const result = data.result || data;
           const items = result.data || data.data || [];
@@ -275,12 +281,9 @@ async function getAbsencesFromOutOfOffice(from, to) {
 
   while (true) {
     try {
-      const params = { status: 9, page, per_page: 100 };
-      if (from && to) {
-        params.date_from = from;
-        params.date_to = to;
-      }
-      const { data } = await getClient().get(`/api/${v}/out-off-office`, { params });
+      const { data } = await getClient().get(`/api/${v}/out-off-office`, {
+        params: { status: 9, page, per_page: 100 },
+      });
       const result = data.result || data;
       let items = result.data || data.data || [];
       if (!Array.isArray(items)) items = Array.isArray(result) ? result : [];
