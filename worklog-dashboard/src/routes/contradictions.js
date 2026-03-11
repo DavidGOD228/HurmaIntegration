@@ -1,6 +1,8 @@
 const express = require('express');
 const contradictionService = require('../services/contradiction.service');
+const summaryService = require('../services/summary.service');
 const db = require('../db');
+const { toDateString } = require('../utils/workdays');
 
 const router = express.Router();
 
@@ -33,7 +35,26 @@ router.patch('/:id/resolve', async (req, res, next) => {
       [id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
-    res.json(rows[0]);
+    const c = rows[0];
+    const dateStr = toDateString(c.contradiction_date);
+    // Recompute that day's summary so contradiction_count and status are correct
+    const { rows: empRows } = await db.query(
+      `SELECT e.id, e.full_name, e.redmine_user_id, e.work_hours_per_day, s.monitoring_mode
+       FROM employees e
+       LEFT JOIN employee_monitoring_settings s ON s.employee_id = e.id
+       WHERE e.id = $1`,
+      [c.employee_id]
+    );
+    if (empRows.length > 0) {
+      const { rows: absences } = await db.query(
+        `SELECT * FROM absences WHERE employee_id = $1 AND date_from <= $2 AND date_to >= $3`,
+        [c.employee_id, dateStr, dateStr]
+      );
+      const { rows: hRows } = await db.query('SELECT holiday_date FROM public_holidays');
+      const holidaySet = new Set(hRows.map((r) => toDateString(r.holiday_date)));
+      await summaryService.computeDaySummary(empRows[0], dateStr, absences, holidaySet);
+    }
+    res.json(c);
   } catch (err) { next(err); }
 });
 

@@ -3,9 +3,11 @@
  *
  * Called once per (employee, date) combination.
  * Reads from time_entries and absences tables; writes to daily_employee_summary.
+ * Creates contradiction records when "logged on leave day" is detected.
  */
 const db     = require('../db');
 const config = require('../config');
+const contradictionService = require('./contradiction.service');
 const { getDayExpectation, toDateString, eachDay } = require('../utils/workdays');
 const logger = require('../utils/logger');
 
@@ -43,6 +45,25 @@ async function computeDaySummary(emp, dateStr, absences, holidaySet) {
 
     const delta     = actualHours - expectedHours;
     const status    = resolveStatus(emp.monitoring_mode, emp.redmine_user_id, expectedHours, actualHours, delta, leaveType);
+
+    // Create contradiction when logged on leave day (so it appears in Conflicts page & counts)
+    if (status === 'CONTRADICTION' && leaveType && expectedHours === 0 && actualHours > 0) {
+      const firstAbsence = dayAbsences[0];
+      const { rows: teRows } = await db.query(
+        `SELECT id FROM time_entries WHERE employee_id = $1 AND entry_date = $2 LIMIT 1`,
+        [emp.id, dateStr]
+      );
+      await contradictionService.upsertLoggedOnLeaveContradiction({
+        employeeId:   emp.id,
+        fullName:     emp.full_name || 'Employee',
+        dateStr,
+        absenceType:  leaveType,
+        actualHours,
+        absenceId:    firstAbsence?.id || null,
+        timeEntryId:  teRows[0]?.id || null,
+      });
+    }
+
     const contrCount = await getContradictionCount(emp.id, dateStr);
 
     await db.query(

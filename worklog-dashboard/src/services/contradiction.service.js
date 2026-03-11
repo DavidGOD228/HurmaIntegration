@@ -262,7 +262,27 @@ async function getContradictions({ employeeId, from, to, type, severity, resolve
   return rows;
 }
 
+/**
+ * Upsert a single contradiction for "logged on leave day" — call from summary when detected.
+ */
+async function upsertLoggedOnLeaveContradiction({
+  employeeId, fullName, dateStr, absenceType, actualHours, absenceId, timeEntryId,
+}) {
+  const type = LEAVE_CONTRADICTION_TYPE[absenceType] || 'LOGGED_ON_OTHER_LEAVE';
+  const severity = ['sick_leave','vacation','unpaid_leave'].includes(absenceType) ? 'HIGH' : 'MEDIUM';
+  await upsertContradiction({
+    employeeId,
+    date:        dateStr,
+    type,
+    severity,
+    description: `${fullName} logged ${actualHours}h in Redmine on ${dateStr}, but is marked as ${absenceType} in Hurma.`,
+    absenceId,
+    timeEntryId,
+  });
+}
+
 module.exports = {
   detectContradictions,
   getContradictions,
+  upsertLoggedOnLeaveContradiction,
 };

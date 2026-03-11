@@ -1,6 +1,6 @@
 {
   "name": "worklog-dashboard",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Internal worklog and attendance dashboard — Hurma vs Redmine comparison",
   "main": "src/server.js",
   "engines": { "node": ">=20.0.0" },
