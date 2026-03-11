@@ -6,7 +6,7 @@
  */
 const db     = require('../db');
 const config = require('../config');
-const { getDayExpectation, toDateString } = require('../utils/workdays');
+const { getDayExpectation, toDateString, eachDay } = require('../utils/workdays');
 const logger = require('../utils/logger');
 
 const THRESHOLD = config.OK_DELTA_THRESHOLD_HOURS;
@@ -181,8 +181,13 @@ async function getMonthlySummary(yearMonth, filters = {}) {
 
 /**
  * Return day-by-day breakdown for a single employee over a date range.
+ * If computeMissing=true, computes summaries for any dates that have no row yet
+ * (e.g. when viewing a period that wasn't synced).
  */
-async function getEmployeeDetails(employeeId, from, to) {
+async function getEmployeeDetails(employeeId, from, to, computeMissing = true) {
+  if (computeMissing) {
+    await ensureSummariesForRange(employeeId, from, to);
+  }
   const { rows } = await db.query(
     `SELECT
        d.summary_date,
@@ -201,6 +206,47 @@ async function getEmployeeDetails(employeeId, from, to) {
     [employeeId, from, to]
   );
   return rows;
+}
+
+/**
+ * Compute daily summaries for any missing dates in the range.
+ * Used when viewing an employee period that may not have been synced yet.
+ */
+async function ensureSummariesForRange(employeeId, from, to) {
+  const { rows: existing } = await db.query(
+    `SELECT summary_date FROM daily_employee_summary
+     WHERE employee_id = $1 AND summary_date >= $2 AND summary_date <= $3`,
+    [employeeId, from, to]
+  );
+  const existingSet = new Set(existing.map((r) => r.summary_date));
+  const missing = [];
+  eachDay(from, to, (dateStr) => {
+    if (!existingSet.has(dateStr)) missing.push(dateStr);
+  });
+  if (missing.length === 0) return;
+
+  const { rows: hRows } = await db.query('SELECT holiday_date FROM public_holidays');
+  const holidaySet = new Set(hRows.map((r) => toDateString(r.holiday_date)));
+
+  const { rows: empRows } = await db.query(
+    `SELECT e.id, e.redmine_user_id, e.work_hours_per_day, s.monitoring_mode
+     FROM employees e
+     LEFT JOIN employee_monitoring_settings s ON s.employee_id = e.id
+     WHERE e.id = $1`,
+    [employeeId]
+  );
+  if (empRows.length === 0) return;
+  const emp = empRows[0];
+
+  const { rows: absences } = await db.query(
+    `SELECT * FROM absences WHERE employee_id = $1 AND date_from <= $2 AND date_to >= $3`,
+    [employeeId, to, from]
+  );
+
+  for (const dateStr of missing) {
+    await computeDaySummary(emp, dateStr, absences, holidaySet);
+  }
+  logger.info({ employeeId, from, to, computed: missing.length }, 'ensureSummariesForRange');
 }
 
 module.exports = {

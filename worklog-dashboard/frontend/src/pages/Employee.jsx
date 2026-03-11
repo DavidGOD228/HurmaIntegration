@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
-import { getEmployeeDetails } from '../api';
+import { getEmployeeDetails, triggerSync } from '../api';
 import StatusBadge from '../components/StatusBadge';
 
 function fmt(n) { return (parseFloat(n) || 0).toFixed(1); }
@@ -29,9 +29,11 @@ export default function Employee() {
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
 
   const load = useCallback(async () => {
-    setLoading(true); setError('');
+    setLoading(true); setError(''); setSyncMsg('');
     try {
       const res = await getEmployeeDetails(id, { from, to });
       setData(res);
@@ -47,6 +49,18 @@ export default function Employee() {
     p.set('from', from); p.set('to', to);
     setSearchParams(p);
     load();
+  };
+
+  const syncThisPeriod = async () => {
+    setSyncing(true); setSyncMsg('');
+    try {
+      await triggerSync({ type: 'all', from, to });
+      setSyncMsg('Sync started. Click Apply to refresh in ~1 min.');
+    } catch (e) {
+      setError('Sync failed: ' + (e.response?.data?.error || e.message));
+    } finally {
+      setSyncing(false);
+    }
   };
 
   if (loading) return <div className="p-6 text-gray-400">Loading…</div>;
@@ -79,6 +93,11 @@ export default function Employee() {
         <button onClick={apply} className="px-3 py-1.5 bg-slate-700 text-white text-sm rounded-lg hover:bg-slate-600 transition-colors">
           Apply
         </button>
+        <button onClick={syncThisPeriod} disabled={syncing}
+          className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-500 disabled:opacity-50 transition-colors">
+          {syncing ? 'Syncing…' : '↻ Sync this period'}
+        </button>
+        {syncMsg && <span className="text-sm text-blue-600">{syncMsg}</span>}
       </div>
 
       {/* Period totals */}
@@ -127,7 +146,9 @@ export default function Employee() {
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
             {days.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">No data for this period. Run a sync first.</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">
+                No data for this period. Click &quot;Sync this period&quot; above, wait ~1 min, then Apply.
+              </td></tr>
             ) : days.map((d, i) => (
               <tr key={i} className="hover:bg-gray-50">
                 <td className="px-4 py-2 font-mono text-xs text-gray-600">{d.summary_date}</td>

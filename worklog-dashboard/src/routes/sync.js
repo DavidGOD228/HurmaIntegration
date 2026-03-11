@@ -20,8 +20,10 @@ router.post('/run', async (req, res, next) => {
 
     const now  = new Date();
     const type = parsed.data.type;
-    const from = parsed.data.from || toDateString(new Date(now.getFullYear(), now.getMonth(), 1));
     const to   = parsed.data.to   || toDateString(now);
+    const fromDefault = new Date(now);
+    fromDefault.setDate(fromDefault.getDate() - 90);
+    const from = parsed.data.from || toDateString(fromDefault);
 
     // Fire-and-forget; respond immediately
     res.json({ status: 'started', type, from, to });
@@ -61,6 +63,27 @@ router.get('/status', async (req, res, next) => {
       `SELECT * FROM sync_runs WHERE status = 'running' ORDER BY started_at DESC`
     );
     res.json({ running: rows });
+  } catch (err) { next(err); }
+});
+
+// GET /api/sync/absences-debug?from=YYYY-MM-DD&to=YYYY-MM-DD — verify absences in DB
+router.get('/absences-debug', async (req, res, next) => {
+  try {
+    const from = req.query.from || toDateString(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
+    const to   = req.query.to   || toDateString(new Date());
+    const { rows: countRows } = await db.query(
+      `SELECT COUNT(*) AS cnt FROM absences WHERE date_from <= $1 AND date_to >= $2`,
+      [to, from]
+    );
+    const { rows: sample } = await db.query(
+      `SELECT a.id, a.employee_id, e.full_name, a.absence_type, a.date_from, a.date_to
+       FROM absences a
+       JOIN employees e ON e.id = a.employee_id
+       WHERE a.date_from <= $1 AND a.date_to >= $2
+       ORDER BY a.date_from DESC LIMIT 10`,
+      [to, from]
+    );
+    res.json({ from, to, count: parseInt(countRows[0].cnt, 10), sample });
   } catch (err) { next(err); }
 });
 

@@ -18,10 +18,12 @@ export default function Layout({ children }) {
     setSyncMsg('');
     try {
       const now   = new Date();
-      const from  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2,'0')}-01`;
       const today = now.toISOString().slice(0, 10);
+      const fromDate = new Date(now);
+      fromDate.setDate(fromDate.getDate() - 90);
+      const from = fromDate.toISOString().slice(0, 10);
       await triggerSync({ type: 'all', from, to: today });
-      setSyncMsg('Sync started — refresh in a minute');
+      setSyncMsg('Sync started — refresh in ~1 min');
     } catch (e) {
       setSyncMsg('Sync failed: ' + (e.response?.data?.error || e.message));
     } finally {
