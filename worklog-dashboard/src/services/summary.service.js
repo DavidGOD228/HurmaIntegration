@@ -232,19 +232,61 @@ async function getEmployeeDetails(employeeId, from, to, computeMissing = true) {
 /**
  * Compute daily summaries for any missing dates in the range.
  * Used when viewing an employee period that may not have been synced yet.
+ * Also recomputes days that have absences but summary incorrectly shows no leave.
  */
 async function ensureSummariesForRange(employeeId, from, to) {
-  const { rows: existing } = await db.query(
-    `SELECT summary_date, status, contradiction_count FROM daily_employee_summary
-     WHERE employee_id = $1 AND summary_date >= $2 AND summary_date <= $3`,
-    [employeeId, from, to]
-  );
-  const existingSet = new Set(existing.map((r) => r.summary_date));
-  const inconsistent = new Set(
-    existing
-      .filter((r) => r.status === 'CONTRADICTION' && parseInt(r.contradiction_count, 10) === 0)
-      .map((r) => r.summary_date)
-  );
+  const [
+    { rows: existing },
+    { rows: absences },
+  ] = await Promise.all([
+    db.query(
+      `SELECT summary_date, status, contradiction_count, leave_type, expected_hours
+       FROM daily_employee_summary
+       WHERE employee_id = $1 AND summary_date >= $2 AND summary_date <= $3`,
+      [employeeId, from, to]
+    ),
+    db.query(
+      `SELECT * FROM absences WHERE employee_id = $1 AND date_from <= $2 AND date_to >= $3`,
+      [employeeId, to, from]
+    ),
+  ]);
+
+  // Normalize dates for consistent comparison (DB may return "2026-03-03" or "2026-03-03T00:00:00.000Z")
+  const norm = (d) => toDateString(d) || String(d);
+  const existingByDate = new Map();
+  for (const r of existing) {
+    const key = norm(r.summary_date);
+    existingByDate.set(key, r);
+  }
+  const existingSet = new Set(existingByDate.keys());
+
+  // Dates that need recompute: CONTRADICTION with 0 count, or has absence but summary shows no leave
+  const inconsistent = new Set();
+  for (const r of existing) {
+    const key = norm(r.summary_date);
+    if (r.status === 'CONTRADICTION' && parseInt(r.contradiction_count, 10) === 0) {
+      inconsistent.add(key);
+    }
+  }
+
+  // Build set of dates covered by absences
+  const absenceDates = new Set();
+  for (const a of absences) {
+    const fromStr = toDateString(a.date_from);
+    const toStr = toDateString(a.date_to);
+    if (!fromStr || !toStr) continue;
+    eachDay(fromStr, toStr, (d) => absenceDates.add(d));
+  }
+
+  // Recompute days with absences where summary incorrectly shows expected hours (no leave applied)
+  for (const dateStr of absenceDates) {
+    if (dateStr < from || dateStr > to) continue;
+    const row = existingByDate.get(dateStr);
+    if (row && !row.leave_type && parseFloat(row.expected_hours) > 0) {
+      inconsistent.add(dateStr);
+    }
+  }
+
   const missing = [];
   eachDay(from, to, (dateStr) => {
     if (!existingSet.has(dateStr) || inconsistent.has(dateStr)) missing.push(dateStr);
@@ -255,7 +297,7 @@ async function ensureSummariesForRange(employeeId, from, to) {
   const holidaySet = new Set(hRows.map((r) => toDateString(r.holiday_date)));
 
   const { rows: empRows } = await db.query(
-    `SELECT e.id, e.redmine_user_id, e.work_hours_per_day, s.monitoring_mode
+    `SELECT e.id, e.redmine_user_id, e.work_hours_per_day, s.monitoring_mode, e.full_name
      FROM employees e
      LEFT JOIN employee_monitoring_settings s ON s.employee_id = e.id
      WHERE e.id = $1`,
@@ -263,11 +305,6 @@ async function ensureSummariesForRange(employeeId, from, to) {
   );
   if (empRows.length === 0) return;
   const emp = empRows[0];
-
-  const { rows: absences } = await db.query(
-    `SELECT * FROM absences WHERE employee_id = $1 AND date_from <= $2 AND date_to >= $3`,
-    [employeeId, to, from]
-  );
 
   for (const dateStr of missing) {
     await computeDaySummary(emp, dateStr, absences, holidaySet);

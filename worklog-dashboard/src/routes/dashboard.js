@@ -66,7 +66,13 @@ router.get('/employees/:id', async (req, res, next) => {
     if (empRows.length === 0) return res.status(404).json({ error: 'Employee not found' });
 
     const employee = empRows[0];
-    const days     = await summaryService.getEmployeeDetails(employeeId, from, to);
+    let days = await summaryService.getEmployeeDetails(employeeId, from, to);
+
+    // Normalize summary_date to YYYY-MM-DD for consistent display
+    days = days.map((d) => ({
+      ...d,
+      summary_date: toDateString(d.summary_date) || d.summary_date,
+    }));
 
     // Summary totals for period
     const totalExpected = days.reduce((s, r) => s + parseFloat(r.expected_hours), 0);
@@ -82,14 +88,19 @@ router.get('/employees/:id', async (req, res, next) => {
       [employeeId, from, to]
     );
 
-    // Absences in range
-    const { rows: absences } = await db.query(
+    // Absences in range (normalize dates for display)
+    const { rows: absencesRaw } = await db.query(
       `SELECT absence_type, date_from, date_to, hours, is_approved
        FROM absences
        WHERE employee_id = $1 AND date_from <= $2 AND date_to >= $3
        ORDER BY date_from ASC`,
       [employeeId, to, from]
     );
+    const absences = absencesRaw.map((a) => ({
+      ...a,
+      date_from: toDateString(a.date_from) || a.date_from,
+      date_to:   toDateString(a.date_to)   || a.date_to,
+    }));
 
     res.json({
       employee,
