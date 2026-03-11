@@ -4,11 +4,15 @@ const db      = require('../db');
 
 const router = express.Router();
 
-// GET /api/mappings/unresolved
+// GET /api/mappings/unresolved — only active employees
 router.get('/unresolved', async (req, res, next) => {
   try {
     const { rows } = await db.query(
-      `SELECT * FROM employee_mapping_queue WHERE status = 'pending' ORDER BY created_at DESC`
+      `SELECT q.*
+       FROM employee_mapping_queue q
+       JOIN employees e ON e.hurma_employee_id = q.hurma_employee_id AND e.is_active = true
+       WHERE q.status = 'pending'
+       ORDER BY q.created_at DESC`
     );
     res.json({ total: rows.length, queue: rows });
   } catch (err) { next(err); }

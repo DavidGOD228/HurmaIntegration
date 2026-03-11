@@ -1,18 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getSettingsEmployees, patchEmployee, getUnresolvedMappings, patchMapping } from '../api';
-import StatusBadge from '../components/StatusBadge';
+import { getSettingsEmployees, patchEmployee } from '../api';
 
 const MODE_OPTIONS = [
   { value: 'included',                         label: 'Included' },
   { value: 'excluded',                          label: 'Excluded' },
   { value: 'ignored_fulltime_external_project', label: 'Ext. project' },
 ];
-
-const MODE_COLORS = {
-  included:                         'bg-green-100 text-green-800',
-  excluded:                         'bg-gray-100 text-gray-600',
-  ignored_fulltime_external_project:'bg-blue-100 text-blue-700',
-};
 
 function ModeSelect({ current, onChange }) {
   return (
@@ -39,7 +32,6 @@ export default function Settings() {
   const [error,     setError]     = useState('');
   const [saving,    setSaving]    = useState({});
   const [pending,   setPending]   = useState({});  // unsaved changes
-  const [mappings,  setMappings]  = useState([]);
 
   const LIMIT = 50;
 
@@ -59,10 +51,6 @@ export default function Settings() {
 
   useEffect(() => { loadEmployees(); }, [loadEmployees]);
 
-  useEffect(() => {
-    getUnresolvedMappings().then((r) => setMappings(r.queue || [])).catch(() => {});
-  }, []);
-
   const markPending = (id, key, val) => {
     setPending((prev) => ({ ...prev, [id]: { ...prev[id], [key]: val } }));
   };
@@ -70,9 +58,18 @@ export default function Settings() {
   const saveEmployee = async (emp) => {
     const changes = pending[emp.id];
     if (!changes) return;
+    const sanitized = { ...changes };
+    if (sanitized.redmine_user_id !== undefined) {
+      const v = sanitized.redmine_user_id;
+      sanitized.redmine_user_id = (v === null || v === '') ? null : (typeof v === 'number' ? v : parseInt(v, 10));
+      if (sanitized.redmine_user_id !== null && isNaN(sanitized.redmine_user_id)) {
+        alert('Redmine ID must be a number');
+        return;
+      }
+    }
     setSaving((s) => ({ ...s, [emp.id]: true }));
     try {
-      await patchEmployee(emp.id, changes);
+      await patchEmployee(emp.id, sanitized);
       setPending((prev) => { const n = {...prev}; delete n[emp.id]; return n; });
       await loadEmployees();
     } catch (e) {
@@ -82,45 +79,12 @@ export default function Settings() {
     }
   };
 
-  const confirmMapping = async (m) => {
-    const redmineId = prompt(`Redmine user ID for "${m.hurma_full_name}":`);
-    if (!redmineId) return;
-    await patchMapping(m.id, { status: 'confirmed', redmine_user_id: parseInt(redmineId, 10) });
-    setMappings((prev) => prev.filter((x) => x.id !== m.id));
-  };
-
-  const rejectMapping = async (m) => {
-    await patchMapping(m.id, { status: 'rejected' });
-    setMappings((prev) => prev.filter((x) => x.id !== m.id));
-  };
-
   const totalPages = Math.ceil(total / LIMIT);
 
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Monitoring Settings</h1>
-      <p className="text-sm text-gray-500 mb-6">Choose which employees are included in the worklog dashboard.</p>
-
-      {/* Unmapped queue */}
-      {mappings.length > 0 && (
-        <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-xl">
-          <h2 className="text-sm font-semibold text-purple-800 mb-3">
-            ⚠ {mappings.length} employee{mappings.length > 1 ? 's' : ''} need Redmine mapping
-          </h2>
-          <div className="space-y-2">
-            {mappings.map((m) => (
-              <div key={m.id} className="flex items-center justify-between gap-4 text-sm">
-                <span className="text-purple-700 font-medium">{m.hurma_full_name}</span>
-                <span className="text-purple-500 text-xs">{m.hurma_email}</span>
-                <div className="flex gap-2">
-                  <button onClick={() => confirmMapping(m)} className="px-2 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-500">Map</button>
-                  <button onClick={() => rejectMapping(m)} className="px-2 py-1 bg-gray-200 text-gray-600 rounded text-xs hover:bg-gray-300">Skip</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <p className="text-sm text-gray-500 mb-6">Choose which employees are included in the worklog dashboard. Add Redmine user ID directly in the table for unmapped employees.</p>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -169,16 +133,27 @@ export default function Settings() {
                 const edits   = pending[emp.id] || {};
                 const mode    = edits.monitoring_mode ?? emp.monitoring_mode ?? 'excluded';
                 const note    = edits.note            ?? emp.note            ?? '';
-                const isDirty = !!pending[emp.id];
+                const redmineId = edits.redmine_user_id !== undefined
+                  ? (edits.redmine_user_id === null || edits.redmine_user_id === '' ? '' : String(edits.redmine_user_id))
+                  : (emp.redmine_user_id ? String(emp.redmine_user_id) : '');
+                const isDirty = !!Object.keys(pending[emp.id] || {}).length;
                 return (
                   <tr key={emp.id} className={isDirty ? 'bg-blue-50' : 'hover:bg-gray-50'}>
                     <td className="px-4 py-3 font-medium text-gray-800">{emp.full_name}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{emp.email || '—'}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{emp.department || '—'}</td>
                     <td className="px-4 py-3">
-                      {emp.redmine_user_id
-                        ? <span className="text-green-700 text-xs font-medium">#{emp.redmine_user_id}</span>
-                        : <span className="text-purple-600 text-xs">unmapped</span>}
+                      <input
+                        type="text"
+                        value={redmineId}
+                        onChange={(e) => {
+                          const v = e.target.value.trim();
+                          const num = v === '' ? null : parseInt(v, 10);
+                          markPending(emp.id, 'redmine_user_id', v === '' ? null : (isNaN(num) ? v : num));
+                        }}
+                        placeholder="ID"
+                        className="border border-gray-200 rounded px-2 py-1 text-xs w-16 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      />
                     </td>
                     <td className="px-4 py-3">
                       <ModeSelect current={mode} onChange={(v) => markPending(emp.id, 'monitoring_mode', v)} />

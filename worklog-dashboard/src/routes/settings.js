@@ -111,6 +111,16 @@ router.patch('/employees/:id', async (req, res, next) => {
         updates.push(`updated_at = NOW()`);
         vals.push(employeeId);
         await db.query(`UPDATE employees SET ${updates.join(', ')} WHERE id = $${i}`, vals);
+        if (redmine_user_id !== undefined) {
+          const { rows: emp } = await db.query('SELECT hurma_employee_id FROM employees WHERE id = $1', [employeeId]);
+          if (emp[0]?.hurma_employee_id) {
+            await db.query(
+              `UPDATE employee_mapping_queue SET status = 'confirmed', updated_at = NOW()
+               WHERE hurma_employee_id = $1 AND status = 'pending'`,
+              [emp[0].hurma_employee_id]
+            );
+          }
+        }
       }
     }
 
