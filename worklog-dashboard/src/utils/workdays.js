@@ -31,7 +31,9 @@ function isPublicHoliday(dateStr, holidaySet) {
  * @returns {string}
  */
 function toDateString(date) {
+  if (date == null) return null;
   const d = new Date(date);
+  if (isNaN(d.getTime())) return null;
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, '0');
   const day = String(d.getUTCDate()).padStart(2, '0');
@@ -83,14 +85,11 @@ function getDayExpectation(dateStr, hoursPerDay, holidaySet, absences) {
     return { expectedHours: 0, leaveType: null };
   }
 
-  // Check if any absence covers this day
+  // Check if any absence covers this day (normalize to YYYY-MM-DD for comparison)
   for (const absence of absences) {
-    const from = absence.date_from instanceof Date
-      ? toDateString(absence.date_from)
-      : absence.date_from;
-    const to   = absence.date_to instanceof Date
-      ? toDateString(absence.date_to)
-      : absence.date_to;
+    const from = toDateString(absence.date_from);
+    const to   = toDateString(absence.date_to);
+    if (!from || !to) continue;
     if (dateStr >= from && dateStr <= to) {
       const absenceHours = parseFloat(absence.hours) || hoursPerDay;
       // Full day absence

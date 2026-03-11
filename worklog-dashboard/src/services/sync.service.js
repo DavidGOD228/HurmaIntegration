@@ -208,8 +208,12 @@ async function syncAbsences(from, to) {
     for (const abs of rawAbsences) {
       const hurmaEmployeeId = String(abs.employee_id || abs.employee?.id || '');
       const absenceType = normalizeAbsenceType(abs.type || abs.absence_type || abs.kind || 'other');
-      const dateFrom = abs.date_from || abs.start_date || abs.from;
-      const dateTo   = abs.date_to   || abs.end_date   || abs.to;
+      const dateFrom = toDateString(abs.date_from || abs.start_date || abs.from);
+      const dateTo   = toDateString(abs.date_to   || abs.end_date   || abs.to);
+      if (!dateFrom || !dateTo) {
+        logger.warn({ abs }, 'Skipping absence with invalid dates');
+        continue;
+      }
 
       const { rows: emp } = await db.query(
         'SELECT id FROM employees WHERE hurma_employee_id = $1',
@@ -290,7 +294,8 @@ async function syncTimeEntries(from, to) {
     for (const row of monitored) {
       const entries = await redmine.getUserTimeEntries(row.redmine_user_id, from, to);
       for (const entry of entries) {
-        const entryDate   = entry.spent_on;
+        const entryDate   = toDateString(entry.spent_on);
+        if (!entryDate) continue;
         const hours       = parseFloat(entry.hours) || 0;
         const projectId   = entry.project?.id   || null;
         const projectName = entry.project?.name || null;
