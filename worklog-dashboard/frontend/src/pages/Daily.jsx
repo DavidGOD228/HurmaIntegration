@@ -73,7 +73,7 @@ export default function Daily() {
     { key: 'actual_hours',        label: 'Logged',         render: (r) => `${fmt(r.actual_hours)}h` },
     { key: 'delta_hours',         label: 'Delta',          render: (r) => <DeltaCell delta={r.delta_hours} /> },
     { key: 'leave_type',          label: 'Leave',          render: (r) => r.leave_type ? <span className="text-blue-700 text-xs">{leaveTypeLabel(r.leave_type)}</span> : '—' },
-    { key: 'contradiction_count', label: 'Issues',         render: (r) => r.contradiction_count > 0 ? <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold">{r.contradiction_count}</span> : '—' },
+    { key: 'contradiction_count', label: 'Issues',         render: (r) => (Number(r.contradiction_count) || 0) > 0 ? <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold">{r.contradiction_count}</span> : '—' },
     { key: 'status',              label: 'Status',         render: (r) => <StatusBadge status={r.status} /> },
   ];
 
@@ -114,7 +114,7 @@ export default function Daily() {
           <StatCard label="On Leave"      value={data.totals.onLeave}        color="bg-blue-50" />
           <StatCard label="Underlogged"   value={data.totals.underlogged}    color="bg-yellow-50" />
           <StatCard label="Overlogged"    value={data.totals.overlogged}     color="bg-orange-50" />
-          <StatCard label="Conflicts"     value={data.totals.contradictions} color="bg-red-50" />
+          <StatCard label="Conflicts"     value={Number(data.totals.contradictions) || 0} color="bg-red-50" />
           <StatCard label="Unmapped"      value={data.totals.unmapped}       color="bg-purple-50" />
         </div>
       )}

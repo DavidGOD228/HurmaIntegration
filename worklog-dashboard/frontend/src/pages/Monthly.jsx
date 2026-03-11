@@ -51,7 +51,7 @@ export default function Monthly() {
     { key: 'delta_hours',        label: 'Delta',        render: (r) => <DeltaCell delta={r.delta_hours} /> },
     { key: 'leave_days',         label: 'Leave days',   render: (r) => r.leave_days || 0 },
     { key: 'underlogged_days',   label: 'Under days',   render: (r) => r.underlogged_days > 0 ? <span className="text-yellow-700 font-semibold">{r.underlogged_days}</span> : '0' },
-    { key: 'contradiction_count',label: 'Conflicts',    render: (r) => r.contradiction_count > 0 ? <span className="text-red-600 font-semibold">{r.contradiction_count}</span> : '0' },
+    { key: 'contradiction_count',label: 'Conflicts',    render: (r) => (Number(r.contradiction_count) || 0) > 0 ? <span className="text-red-600 font-semibold">{r.contradiction_count}</span> : '0' },
     { key: 'ok_days',            label: 'OK days',      render: (r) => <span className="text-green-700">{r.ok_days || 0}</span> },
   ];
 
@@ -88,6 +88,7 @@ export default function Monthly() {
             <span className="font-semibold">{data.employees.length}</span> employees ·
             Total expected: <span className="font-semibold">{fmt(data.employees.reduce((s,r) => s + parseFloat(r.expected_hours||0), 0))}h</span> ·
             Total logged: <span className="font-semibold">{fmt(data.employees.reduce((s,r) => s + parseFloat(r.actual_hours||0), 0))}h</span>
+            <> · Conflicts: <span className={((data.totals && data.totals.conflicts) || 0) > 0 ? 'font-semibold text-red-600' : 'font-semibold'}>{Number(data.totals && data.totals.conflicts) || 0}</span></>
           </div>
           <SortableTable
             columns={columns}

@@ -32,14 +32,17 @@ router.get('/daily', async (req, res, next) => {
     await summaryService.ensureSummariesForDate(date);
     const rows = await summaryService.getDailySummary(date, filters);
 
-    // Totals
+    // Totals (ensure numbers for frontend)
+    const contradictionsCount = rows.filter((r) => r.status === 'CONTRADICTION').length;
+    const totalConflictIssues = rows.reduce((s, r) => s + (parseInt(r.contradiction_count, 10) || 0), 0);
     const totals = {
       monitored:     rows.length,
       onLeave:       rows.filter((r) => r.status === 'ON_LEAVE').length,
       ok:            rows.filter((r) => r.status === 'OK').length,
       underlogged:   rows.filter((r) => r.status === 'UNDERLOGGED').length,
       overlogged:    rows.filter((r) => r.status === 'OVERLOGGED').length,
-      contradictions:rows.filter((r) => r.status === 'CONTRADICTION').length,
+      contradictions: contradictionsCount,
+      totalConflictIssues,
       unmapped:      rows.filter((r) => r.status === 'UNMAPPED').length,
     };
 
@@ -57,7 +60,8 @@ router.get('/monthly', async (req, res, next) => {
       onlyProblematic: req.query.onlyProblematic === '1' || req.query.onlyProblematic === 'true',
     };
     const rows = await summaryService.getMonthlySummary(month, filters);
-    res.json({ month, employees: rows });
+    const totalConflicts = rows.reduce((s, r) => s + (parseInt(r.contradiction_count, 10) || 0), 0);
+    res.json({ month, totals: { conflicts: totalConflicts }, employees: rows });
   } catch (err) { next(err); }
 });
 
