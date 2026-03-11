@@ -206,8 +206,10 @@ async function getMonthlySummary(yearMonth, filters = {}) {
  * (e.g. when viewing a period that wasn't synced).
  */
 async function getEmployeeDetails(employeeId, from, to, computeMissing = true) {
+  const fromNorm = toDateString(from) || from;
+  const toNorm   = toDateString(to)   || to;
   if (computeMissing) {
-    await ensureSummariesForRange(employeeId, from, to);
+    await ensureSummariesForRange(employeeId, fromNorm, toNorm);
   }
   const { rows } = await db.query(
     `SELECT
@@ -224,7 +226,7 @@ async function getEmployeeDetails(employeeId, from, to, computeMissing = true) {
        AND d.summary_date >= $2
        AND d.summary_date <= $3
      ORDER BY d.summary_date ASC`,
-    [employeeId, from, to]
+    [employeeId, fromNorm, toNorm]
   );
   return rows;
 }
@@ -278,13 +280,9 @@ async function ensureSummariesForRange(employeeId, from, to) {
     eachDay(fromStr, toStr, (d) => absenceDates.add(d));
   }
 
-  // Recompute days with absences where summary incorrectly shows expected hours (no leave applied)
+  // Always recompute every day that has an absence so LEAVE column and expected hours are correct
   for (const dateStr of absenceDates) {
-    if (dateStr < from || dateStr > to) continue;
-    const row = existingByDate.get(dateStr);
-    if (row && !row.leave_type && parseFloat(row.expected_hours) > 0) {
-      inconsistent.add(dateStr);
-    }
+    if (dateStr >= from && dateStr <= to) inconsistent.add(dateStr);
   }
 
   const missing = [];

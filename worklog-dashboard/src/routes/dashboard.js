@@ -53,8 +53,8 @@ router.get('/employees/:id', async (req, res, next) => {
 
     const now = new Date();
     const defaultFrom = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
-    const from = req.query.from || defaultFrom;
-    const to   = req.query.to   || toDateString(now);
+    const from = toDateString(req.query.from) || req.query.from || defaultFrom;
+    const to   = toDateString(req.query.to)   || req.query.to   || toDateString(now);
 
     const { rows: empRows } = await db.query(
       `SELECT e.*, s.monitoring_mode, s.note AS monitoring_note
