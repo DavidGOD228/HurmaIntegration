@@ -1,6 +1,6 @@
-import { NavLink, useNavigate } from 'react-router-dom';
-import { triggerSync } from '../api';
-import { useState } from 'react';
+import { NavLink } from 'react-router-dom';
+import { triggerSync, getVersion } from '../api';
+import { useState, useEffect } from 'react';
 
 const nav = [
   { to: '/',           label: 'Daily',    icon: '📅' },
@@ -12,6 +12,11 @@ const nav = [
 export default function Layout({ children }) {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [version, setVersion] = useState('');
+
+  useEffect(() => {
+    getVersion().then((d) => setVersion(d.version || '')).catch(() => {});
+  }, []);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -22,13 +27,18 @@ export default function Layout({ children }) {
       const fromDate = new Date(now);
       fromDate.setDate(fromDate.getDate() - 90);
       const from = fromDate.toISOString().slice(0, 10);
-      await triggerSync({ type: 'all', from, to: today });
-      setSyncMsg('Sync started — refresh in ~1 min');
+      const res = await triggerSync({ type: 'all', from, to: today, wait: true });
+      if (res.status === 'success') {
+        setSyncMsg('Synced — refreshing…');
+        window.location.reload();
+      } else {
+        setSyncMsg(res.error || 'Sync failed');
+      }
     } catch (e) {
       setSyncMsg('Sync failed: ' + (e.response?.data?.error || e.message));
     } finally {
       setSyncing(false);
-      setTimeout(() => setSyncMsg(''), 4000);
+      setTimeout(() => setSyncMsg(''), 6000);
     }
   };
 
@@ -69,6 +79,9 @@ export default function Layout({ children }) {
           </button>
           {syncMsg && (
             <p className="mt-2 text-xs text-slate-400 text-center">{syncMsg}</p>
+          )}
+          {version && (
+            <p className="mt-2 text-xs text-slate-500 text-center">v{version}</p>
           )}
         </div>
       </aside>

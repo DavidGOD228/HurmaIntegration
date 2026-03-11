@@ -45,6 +45,16 @@ app.get('/health', (_req, res) => res.json({ ok: true, service: 'worklog-dashboa
 // ── Admin auth (all routes below require Basic Auth) ──────────────────────────
 app.use(auth);
 
+// ── Version (for UI display) ───────────────────────────────────────────────────
+app.get('/api/version', (_req, res) => {
+  try {
+    const pkg = require('../package.json');
+    res.json({ version: pkg.version || '1.0.0' });
+  } catch {
+    res.json({ version: '1.0.0' });
+  }
+});
+
 // ── API routes ────────────────────────────────────────────────────────────────
 app.use('/api/dashboard',    dashboardRoutes);
 app.use('/api/settings',     settingsRoutes);

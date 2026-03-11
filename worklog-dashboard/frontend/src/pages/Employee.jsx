@@ -54,8 +54,13 @@ export default function Employee() {
   const syncThisPeriod = async () => {
     setSyncing(true); setSyncMsg('');
     try {
-      await triggerSync({ type: 'all', from, to });
-      setSyncMsg('Sync started. Click Apply to refresh in ~1 min.');
+      const res = await triggerSync({ type: 'all', from, to, wait: true });
+      if (res.status === 'success') {
+        setSyncMsg('Synced — refreshing…');
+        load();
+      } else {
+        setError(res.error || 'Sync failed');
+      }
     } catch (e) {
       setError('Sync failed: ' + (e.response?.data?.error || e.message));
     } finally {

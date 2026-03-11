@@ -21,7 +21,11 @@ export const patchEmployee = (id, data) =>
 
 // ── Sync ───────────────────────────────────────────────────────────────────
 export const triggerSync = (data) =>
-  api.post('/sync/run', data).then((r) => r.data);
+  api.post('/sync/run', data, { timeout: data.wait ? 300000 : 10000 }).then((r) => r.data);
+
+// ── Version ──────────────────────────────────────────────────────────────────
+export const getVersion = () =>
+  api.get('/version').then((r) => r.data);
 
 export const getSyncRuns = (params) =>
   api.get('/sync/runs', { params }).then((r) => r.data);
