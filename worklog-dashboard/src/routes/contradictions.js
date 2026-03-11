@@ -14,9 +14,12 @@ router.get('/', async (req, res, next) => {
       resolved = 'false',
     } = req.query;
 
+    const fromNorm = from ? (toDateString(from) || from) : null;
+    const toNorm   = to   ? (toDateString(to)   || to)   : null;
+
     const rows = await contradictionService.getContradictions({
-      from:       from || null,
-      to:         to   || null,
+      from:       fromNorm,
+      to:         toNorm,
       employeeId: employeeId ? parseInt(employeeId, 10) : undefined,
       type:       type       || undefined,
       severity:   severity   || undefined,

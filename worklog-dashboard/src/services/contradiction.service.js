@@ -237,6 +237,27 @@ async function upsertContradiction({
        is_resolved = false`,
     [employeeId, date, type, severity, description, absenceId || null, timeEntryId || null]
   );
+  // Keep daily_employee_summary.contradiction_count in sync so Monthly overview and totals are correct
+  await db.query(
+    `UPDATE daily_employee_summary d SET
+       contradiction_count = (
+         SELECT COUNT(*)::int FROM contradictions c
+         WHERE c.employee_id = d.employee_id
+           AND c.contradiction_date = d.summary_date
+           AND c.is_resolved = false
+       ),
+       status = CASE
+         WHEN (
+           SELECT COUNT(*) FROM contradictions c
+           WHERE c.employee_id = d.employee_id
+             AND c.contradiction_date = d.summary_date
+             AND c.is_resolved = false
+         ) > 0 THEN 'CONTRADICTION'
+         ELSE d.status
+       END
+     WHERE d.employee_id = $1 AND d.summary_date = $2`,
+    [employeeId, date]
+  );
 }
 
 /**
