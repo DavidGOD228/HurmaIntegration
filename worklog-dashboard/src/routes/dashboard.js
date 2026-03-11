@@ -32,11 +32,23 @@ router.get('/daily', async (req, res, next) => {
     await summaryService.ensureSummariesForDate(date);
     let rows = await summaryService.getDailySummary(date, filters);
 
-    // Coerce contradiction_count to number so frontend always gets a numeric count
-    rows = rows.map((r) => ({
-      ...r,
-      contradiction_count: parseInt(r.contradiction_count, 10) || 0,
-    }));
+    // Fetch conflict counts directly from contradictions table and merge (avoids subquery/param issues)
+    const { rows: conflictCounts } = await db.query(
+      `SELECT employee_id, COUNT(*)::int AS cnt FROM contradictions
+       WHERE contradiction_date = $1::date AND is_resolved = false
+       GROUP BY employee_id`,
+      [date]
+    );
+    const countByEmployee = new Map(conflictCounts.map((r) => [r.employee_id, r.cnt]));
+
+    rows = rows.map((r) => {
+      const cnt = countByEmployee.get(r.employee_id) || 0;
+      return {
+        ...r,
+        contradiction_count: cnt,
+        status: cnt > 0 ? 'CONTRADICTION' : r.status,
+      };
+    });
 
     const totalConflictIssues = rows.reduce((s, r) => s + r.contradiction_count, 0);
     const totals = {
@@ -63,10 +75,27 @@ router.get('/monthly', async (req, res, next) => {
       onlyProblematic: req.query.onlyProblematic === '1' || req.query.onlyProblematic === 'true',
     };
     let rows = await summaryService.getMonthlySummary(month, filters);
-    rows = rows.map((r) => ({
-      ...r,
-      contradiction_count: parseInt(r.contradiction_count, 10) || 0,
-    }));
+
+    // Fetch conflict counts directly from contradictions table for the month and merge
+    const [y, m] = month.split('-').map(Number);
+    const from = `${y}-${String(m).padStart(2, '0')}-01`;
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const to = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const { rows: conflictCounts } = await db.query(
+      `SELECT employee_id, COUNT(*)::int AS cnt FROM contradictions
+       WHERE contradiction_date >= $1::date AND contradiction_date <= $2::date AND is_resolved = false
+       GROUP BY employee_id`,
+      [from, to]
+    );
+    const countByEmployee = new Map(conflictCounts.map((r) => [r.employee_id, r.cnt]));
+
+    rows = rows.map((r) => {
+      const cnt = countByEmployee.get(r.employee_id) || 0;
+      return {
+        ...r,
+        contradiction_count: cnt,
+      };
+    });
     const totalConflicts = rows.reduce((s, r) => s + r.contradiction_count, 0);
     res.json({ month, totals: { conflicts: totalConflicts }, employees: rows });
   } catch (err) { next(err); }
