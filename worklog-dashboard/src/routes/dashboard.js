@@ -66,29 +66,8 @@ router.get('/employees/:id', async (req, res, next) => {
     if (empRows.length === 0) return res.status(404).json({ error: 'Employee not found' });
 
     const employee = empRows[0];
-    let days = await summaryService.getEmployeeDetails(employeeId, from, to);
 
-    // Normalize summary_date to YYYY-MM-DD for consistent display
-    days = days.map((d) => ({
-      ...d,
-      summary_date: toDateString(d.summary_date) || d.summary_date,
-    }));
-
-    // Summary totals for period
-    const totalExpected = days.reduce((s, r) => s + parseFloat(r.expected_hours), 0);
-    const totalActual   = days.reduce((s, r) => s + parseFloat(r.actual_hours), 0);
-    const totalContradictions = days.reduce((s, r) => s + parseInt(r.contradiction_count, 10), 0);
-
-    // Recent time entries
-    const { rows: entries } = await db.query(
-      `SELECT te.entry_date, te.hours, te.project_name, te.issue_id, te.activity_name, te.comments
-       FROM time_entries te
-       WHERE te.employee_id = $1 AND te.entry_date >= $2 AND te.entry_date <= $3
-       ORDER BY te.entry_date DESC LIMIT 100`,
-      [employeeId, from, to]
-    );
-
-    // Absences in range (normalize dates for display)
+    // Absences in range (fetch early so we can enrich days)
     const { rows: absencesRaw } = await db.query(
       `SELECT absence_type, date_from, date_to, hours, is_approved
        FROM absences
@@ -101,6 +80,55 @@ router.get('/employees/:id', async (req, res, next) => {
       date_from: toDateString(a.date_from) || a.date_from,
       date_to:   toDateString(a.date_to)   || a.date_to,
     }));
+
+    let days = await summaryService.getEmployeeDetails(employeeId, from, to);
+
+    // Normalize summary_date to YYYY-MM-DD for consistent display
+    days = days.map((d) => ({
+      ...d,
+      summary_date: toDateString(d.summary_date) || d.summary_date,
+    }));
+
+    // Enrich days with leave from absences so table always shows leave type and correct expected/delta/status
+    days = days.map((d) => {
+      const dateStr = d.summary_date;
+      const matchingAbsence = absences.find(
+        (a) => a.date_from && a.date_to && dateStr >= a.date_from && dateStr <= a.date_to
+      );
+      if (!matchingAbsence) return d;
+      const absenceHours = parseFloat(matchingAbsence.hours) || 8;
+      const workHoursPerDay = parseFloat(employee.work_hours_per_day) || 8;
+      const isFullDayLeave = absenceHours >= workHoursPerDay;
+      const expectedHours = isFullDayLeave ? 0 : Math.max(0, workHoursPerDay - absenceHours);
+      const actualHours = parseFloat(d.actual_hours) || 0;
+      const deltaHours = actualHours - expectedHours;
+      const status = isFullDayLeave
+        ? (actualHours > 0 ? 'CONTRADICTION' : 'ON_LEAVE')
+        : (Math.abs(deltaHours) <= 0.5 ? 'OK' : deltaHours < -0.5 ? 'UNDERLOGGED' : 'OVERLOGGED');
+      const contradictionCount = isFullDayLeave && actualHours > 0 ? 1 : (parseInt(d.contradiction_count, 10) || 0);
+      return {
+        ...d,
+        leave_type: matchingAbsence.absence_type,
+        expected_hours: expectedHours,
+        delta_hours: deltaHours,
+        status,
+        contradiction_count: contradictionCount,
+      };
+    });
+
+    // Summary totals from enriched days
+    const totalExpected = days.reduce((s, r) => s + parseFloat(r.expected_hours), 0);
+    const totalActual   = days.reduce((s, r) => s + parseFloat(r.actual_hours), 0);
+    const totalContradictions = days.reduce((s, r) => s + parseInt(r.contradiction_count, 10), 0);
+
+    // Recent time entries
+    const { rows: entries } = await db.query(
+      `SELECT te.entry_date, te.hours, te.project_name, te.issue_id, te.activity_name, te.comments
+       FROM time_entries te
+       WHERE te.employee_id = $1 AND te.entry_date >= $2 AND te.entry_date <= $3
+       ORDER BY te.entry_date DESC LIMIT 100`,
+      [employeeId, from, to]
+    );
 
     res.json({
       employee,
